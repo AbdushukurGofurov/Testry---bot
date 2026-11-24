@@ -125,6 +125,13 @@ def retest_candidates(days=14):
                          (cutoff,)).fetchall()
 
 
+def last_finished(user_id):
+    """Foydalanuvchining oxirgi tugallangan (natija olgan) urinishi."""
+    with conn() as c:
+        return c.execute("SELECT * FROM sessions WHERE user_id=? AND finished_at IS NOT NULL "
+                         "ORDER BY id DESC LIMIT 1", (user_id,)).fetchone()
+
+
 def latest_per_user():
     """Har bir foydalanuvchining eng oxirgi urinishi."""
     with conn() as c:

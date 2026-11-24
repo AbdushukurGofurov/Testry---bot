@@ -100,6 +100,29 @@ FILTER = {
     ],
 }
 
+# Boshidagi "kimsiz" savoli: foydalanuvchi o'zi yozadi (namunaga qarab)
+WHO = {
+    "text": {
+        "uz": "Hozir kimsiz? O‘zingiz haqingizda bir gap bilan yozib yuboring 👇\n\n"
+              "<i>Namuna:</i>\n"
+              "• 9-sinf o‘quvchisiman, 45-maktab, Toshkent\n"
+              "• 11-sinf, akademik litsey, tibbiyotga tayyorlanyapman\n"
+              "• Abituriyentman, IT yo‘nalishiga topshirmoqchiman\n"
+              "• TATU 2-kurs talabasiman\n"
+              "• Buxgalterman, 5 yil ishlayman, kasbimni o‘zgartirmoqchiman",
+        "ru": "Кто вы сейчас? Напишите о себе одним предложением 👇\n\n"
+              "<i>Пример:</i>\n"
+              "• Ученик 9 класса, школа №45, Ташкент\n"
+              "• 11 класс, академический лицей, готовлюсь в медицину\n"
+              "• Абитуриент, хочу поступать на IT\n"
+              "• Студент 2 курса ТУИТ\n"
+              "• Бухгалтер, работаю 5 лет, хочу сменить профессию",
+    },
+    "short": {"uz": "Iltimos, o‘zingiz haqingizda biroz batafsilroq yozing (namunadagidek) 🙂",
+              "ru": "Пожалуйста, напишите о себе чуть подробнее (как в примере) 🙂"},
+    "wait": {"uz": "Javobingizni shu chatga matn qilib yozing 👇", "ru": "Напишите ответ текстом в этот чат 👇"},
+}
+
 SUBJECTS = {
     "text": {"uz": "Qaysi fanlar sizga osonroq? (2 tagacha tanlang)",
              "ru": "Какие предметы даются вам легче? (выберите до двух)"},

@@ -26,7 +26,7 @@ import report
 import scoring
 from engage import E
 from questions import (DIFFICULTY, FIELD, FORMAT, SUBJECTS, VALUES, FILTER, INTEREST, LICENSE_NOTICE, OPEN_DOUBT, OPEN_DREAM, PAIRS, TIPI, WRONG_PART,
-                       pair_key)
+                       WHO, TYPE_NAMES, pair_key)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -139,6 +139,18 @@ T = {
                             "Ваше мнение поможет улучшить тест (необязательно)."},
     "report_fb_thanks": {"uz": "Fikringiz uchun katta rahmat! 🙏\n\nTestni qayta topshirish: /start",
                          "ru": "Большое спасибо за отзыв! 🙏\n\nПройти тест заново: /start"},
+    "history": {"uz": "Assalomu alaykum, {name}! 😊 Siz {date} kuni testni yechgansiz.\n\nNatijangiz: <b>{tip}</b>\n"
+                      "Eng kuchli qiziqishlaringiz: {types}.\n\n"
+                      "Qiziqishlar vaqt o‘tib o‘zgarishi mumkin. Testni qaytadan yechib, tekshirib ko‘rishni xohlaysizmi?",
+                "ru": "Здравствуйте, {name}! 😊 Вы проходили тест {date}.\n\nВаш результат: <b>{tip}</b>\n"
+                      "Самые сильные интересы: {types}.\n\n"
+                      "Интересы со временем могут меняться. Хотите пройти тест заново и проверить?"},
+    "again_yes": {"uz": "🔄 Ha, qaytadan yechaman", "ru": "🔄 Да, пройти заново"},
+    "again_show": {"uz": "📊 Natijamni ko‘rish", "ru": "📊 Мой результат"},
+    "again_report": {"uz": "📘 Hisobotimni qayta ko‘rish", "ru": "📘 Мой отчёт ещё раз"},
+    "again_no": {"uz": "Hozircha yo‘q", "ru": "Пока нет"},
+    "again_bye": {"uz": "Yaxshi! 😊 Istalgan payt /start bosib, testni qayta yechishingiz mumkin.",
+                  "ru": "Хорошо! 😊 Пройти тест заново можно в любой момент: /start"},
     "retest": {"uz": "Salom! 2 hafta oldin Testry testini topshirgandingiz. Qiziqishlaringiz o‘zgarganmi? "
                      "Testni qayta topshirib ko‘ring — bu bizga testni yaxshilashga yordam beradi: /start",
                "ru": "Привет! 2 недели назад вы прошли тест Testry. Изменились ли ваши интересы? "
@@ -191,9 +203,60 @@ async def on_start(message: Message, command: CommandObject):
         await message.answer(T["resume"][lang], reply_markup=kb(
             [[(T["resume_yes"][lang], f"yes:{last['id']}")], [(T["resume_no"][lang], "no:0")]], "resume"))
         return
+    prev = db.last_finished(u.id)
+    if prev and prev["result"]:
+        await show_history(message, prev)
+        return
     ref = command.args if command and command.args else None
     sid = db.new_session(u.id, u.username, u.first_name, ref)
     await show_step(message, sid, edit=False)
+
+
+async def show_history(message: Message, prev):
+    import json
+    import time as _t
+    d = db.data_of(prev)
+    lang = d.get("lang", "uz")
+    res = json.loads(prev["result"])
+    top = res.get("top") or []
+    if res.get("kind") == "normal" and len(top) == 2:
+        tip = PAIRS[pair_key(*top)][0 if lang == "uz" else 1]
+    else:
+        tip = "Keng qiziqishli izlanuvchi" if lang == "uz" else "Исследователь с широкими интересами"
+    types = ", ".join(TYPE_NAMES[t][lang] for t in top)
+    date = _t.strftime("%d.%m.%Y", _t.gmtime((prev["finished_at"] or 0) + 5 * 3600))
+    rows = [[(T["again_yes"][lang], "new")], [(T["again_show"][lang], "show")]]
+    if d.get("report_sent"):
+        rows.append([(T["again_report"][lang], "report")])
+    rows.append([(T["again_no"][lang], "no")])
+    await message.answer(T["history"][lang].format(name=html.escape(message.from_user.first_name or ""), date=date,
+                                                   tip=html.escape(tip), types=types),
+                         reply_markup=kb(rows, f"again:{prev['id']}"))
+
+
+@dp.callback_query(F.data.startswith("again:"))
+async def on_again(cb: CallbackQuery):
+    _, sid, val = cb.data.split(":")
+    sid = int(sid)
+    prev = db.get(sid)
+    await cb.answer()
+    if not prev or prev["user_id"] != cb.from_user.id:
+        return
+    d = db.data_of(prev)
+    lang = d.get("lang", "uz")
+    await cb.message.edit_reply_markup(reply_markup=None)
+    if val == "new":
+        u = cb.from_user
+        new_sid = db.new_session(u.id, u.username, u.first_name)
+        await show_step(cb.message, new_sid, edit=False)
+    elif val == "show":
+        text, _meta = scoring.free_result(html.escape(cb.from_user.first_name or ""), d["interest"], lang)
+        await cb.message.answer(text)
+        await cb.message.answer(T["again_bye"][lang])
+    elif val == "report" and d.get("report_sent"):
+        await deliver_report(cb.bot, sid, to=cb.from_user.id)
+    else:
+        await cb.message.answer(T["again_bye"][lang])
 
 
 @dp.callback_query(F.data.startswith("resume:"))
@@ -458,7 +521,7 @@ async def on_export(message: Message):
     buf = io.StringIO()
     w = csv.writer(buf)
     head = (["session_id", "user_id", "username", "ref", "retest_of", "started_at", "finished_at", "minutes",
-             "lang", "age", "filter"] + [f"int{i + 1}_{INTEREST[i][0]}" for i in range(30)] +
+             "lang", "age", "filter", "who_text"] + [f"int{i + 1}_{INTEREST[i][0]}" for i in range(30)] +
             [f"tipi{i + 1}_{TIPI[i][0]}{'_R' if TIPI[i][1] else ''}" for i in range(10)] +
             ["subjects", "field", "values", "format", "difficulty", "guess", "R", "I", "A", "S", "E", "C",
              "profile", "top", "guess_match", "ext", "agr", "con", "emo", "opn", "rating", "wrong",
@@ -473,7 +536,7 @@ async def on_export(message: Message):
         tp = res.get("tipi", {})
         mins = round((r["finished_at"] - d["first_answer_at"]) / 60, 1) if r["finished_at"] and d.get("first_answer_at") else ""
         w.writerow([r["id"], r["user_id"], r["username"], r["ref"], r["retest_of"], r["started_at"], r["finished_at"], mins,
-                    d.get("lang"), d.get("age"), d.get("filter")] +
+                    d.get("lang"), d.get("age"), d.get("filter"), d.get("who_text")] +
                    (d.get("interest") or [None] * 30) + (d.get("tipi") or [None] * 10) +
                    [";".join(d.get("subjects", [])), d.get("field"), d.get("values"), d.get("format"),
                     ";".join(d.get("difficulty", [])), ";".join(d.get("guess", []))] +
@@ -515,7 +578,7 @@ async def notify_admins(bot: Bot, sid: int, title: str):
     pair = PAIRS[pair_key(*top)][0] if res.get("kind") == "normal" else res.get("kind")
     env = scoring.env_lines(res.get("tipi", {}), "uz") if res.get("tipi") else []
     who = (f"@{row['username']}, " if row["username"] else "") + f"id {row['user_id']}"
-    filt = dict((o[0], o[1]) for o in FILTER["options"]).get(d.get("filter"), "")
+    filt = html.escape(d.get("who_text") or dict((o[0], o[1]) for o in FILTER["options"]).get(d.get("filter"), ""))
 
     def labels(q, codes):
         m = {o[0]: o[1] for o in q["options"]}
@@ -701,6 +764,19 @@ async def on_text(message: Message):
         if await relay_admin_reply(message):
             return
     last = db.latest(message.from_user.id)
+    if last and last["finished_at"] is None:
+        data = db.data_of(last)
+        steps = flow.build_steps(data.get("filter"), "free")
+        pos = last["pos"] or 0
+        if pos < len(steps) and steps[pos] == "who":
+            lang = data.get("lang", "uz")
+            new_pos, data, err = flow.apply(steps, pos, data, message.text)
+            if err == "short":
+                await message.answer(WHO["short"][lang])
+                return
+            db.save(last["id"], data=data, pos=new_pos)
+            await show_step(message, last["id"], edit=False)
+            return
     if last and last["stage"] in ("dream", "doubt"):
         await save_open(message, last["id"], message.text[:2000], message.bot)
         return

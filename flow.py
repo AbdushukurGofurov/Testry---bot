@@ -3,8 +3,9 @@
 Bu fayl Telegram'ga bog'liq emas, shuning uchun uni alohida sinash mumkin.
 """
 import html
+import re
 from questions import (SCALE5, SCALE7, INTEREST, TIPI, TIPI_PREFIX, AGE, FILTER, SUBJECTS, FIELD,
-                       VALUES, FORMAT, DIFFICULTY, SELF_GUESS)
+                       VALUES, FORMAT, DIFFICULTY, SELF_GUESS, WHO)
 
 FREE_TOTAL = 30   # qiziqish savollari (hamma uchun)
 PAID_TOTAL = 14   # xarakter 10 + kontekst 4 (pullik hisobot tanlaganlar uchun)
@@ -37,7 +38,7 @@ def build_steps(filter_code: str | None, phase: str = "free") -> list[str]:
         steps = [f"tipi{i}" for i in range(10)]
         steps += ["field" if filter_code == "D" else "subjects", "values", "format", "difficulty"]
         return steps
-    steps = ["lang", "age", "filter"]
+    steps = ["lang", "age", "who"]
     steps += [f"int{i}" for i in range(30)]
     steps += ["guess"]
     return steps
@@ -68,6 +69,9 @@ def render(step: str, lang: str, data: dict) -> tuple[str, list[list[tuple[str, 
     num = numbered(step)
     head = f"<b>{UI[num[2]][lang]} {num[0]}/{num[1]}</b>" if num else ""
     back = [[(UI["back"][lang], "__back")]] if step not in ("lang",) else []
+
+    if step == "who":
+        return WHO["text"][lang], back
 
     if step.startswith("int"):
         i = int(step[3:])
@@ -116,6 +120,14 @@ def apply(steps: list[str], pos: int, data: dict, value: str, min_pos: int = 1) 
         data["lang"] = value
         return pos + 1, data, None
 
+    if step == "who":
+        text = " ".join((value or "").split())
+        if len(text) < 3:
+            return pos, data, "short"
+        data["who_text"] = text[:300]
+        data["filter"] = infer_filter(text, data.get("age"))
+        return pos + 1, data, None
+
     if step.startswith("int"):
         v = int(value)
         if not 0 <= v <= 4:
@@ -159,6 +171,28 @@ def apply(steps: list[str], pos: int, data: dict, value: str, min_pos: int = 1) 
         return pos, data, None
     data[step] = value
     return pos + 1, data, None
+
+
+def infer_filter(text: str, age: str | None) -> str:
+    """O‘zi yozgan matndan guruhni aniqlaydi: A (8–9-sinf), B (10–11, litsey, kollej), C (abituriyent, talaba), D (ishlaydi).
+    Topilmasa, yoshga qarab tanlanadi. Bu faqat qaysi qo‘shimcha savol berilishini belgilaydi."""
+    t = text.lower().replace("’", "'").replace("‘", "'").replace("ʻ", "'")
+    m = re.search(r"(\d{1,2})\s*-?\s*(?:sinf|класс|-?й класс)", t)
+    if m:
+        n = int(m.group(1))
+        if n <= 9:
+            return "A"
+        if n <= 11:
+            return "B"
+    if any(k in t for k in ("litsey", "lisey", "kollej", "texnikum", "лицей", "колледж", "техникум")):
+        return "B"
+    if any(k in t for k in ("abituriyent", "abiturient", "talaba", "kurs", "universitet", "institut", "otm",
+                            "абитуриент", "студент", "курс", "университет", "институт", "вуз")):
+        return "C"
+    if any(k in t for k in ("ishlay", "ishchi", "xodim", "tajriba", "kasbim", "lavozim", "biznesim", "ish joy",
+                            "работа", "работаю", "опыт", "сотрудник", "должност", "сменить", "бизнес")):
+        return "D"
+    return {"13-15": "A", "16-17": "B", "18-22": "C", "23+": "D"}.get(age or "", "B")
 
 
 def max_msg(step: str, lang: str) -> str:

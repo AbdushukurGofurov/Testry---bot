@@ -153,11 +153,12 @@ def last_active(row) -> int:
 
 # ---------- Qayerda to'xtadi ----------
 
-FUNNEL_ORDER = (["lang", "age", "filter"] + [f"int{i}" for i in range(30)] + ["guess", "rating", "wrong", "offer",
+FUNNEL_ORDER = (["lang", "age", "who", "filter"] + [f"int{i}" for i in range(30)] + ["guess", "rating", "wrong", "offer",
                  "declined"] + [f"paid{i}" for i in range(14)] +
                 ["open", "pay_none", "pay_pending", "pay_rejected", "report_rate", "report_fb", "closed"])
 
-LABELS = {"lang": "Til tanlash", "age": "Yosh savoli", "filter": "Kimligi (filtr)", "guess": "O‘z taxmini savoli",
+LABELS = {"lang": "Til tanlash", "age": "Yosh savoli", "who": "“Kimsiz?” (o‘zi yozadi)", "filter": "Kimligi (filtr)",
+          "guess": "O‘z taxmini savoli",
           "rating": "Natijaga baho bermadi", "wrong": "“Noto‘g‘ri qism” savoli", "offer": "Pullik taklif: qaror qilmadi",
           "declined": "Pullik taklifni rad etdi", "open": "Ochiq savollar (orzu/ikkilanish)",
           "pay_none": "Savollar tugadi, chek yubormadi", "pay_pending": "Chek yubordi, tasdiq kutilmoqda",
