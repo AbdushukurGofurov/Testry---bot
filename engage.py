@@ -155,14 +155,14 @@ def last_active(row) -> int:
 
 FUNNEL_ORDER = (["lang", "age", "who", "filter"] + [f"int{i}" for i in range(30)] + ["guess", "rating", "wrong", "offer",
                  "declined"] + [f"paid{i}" for i in range(14)] +
-                ["open", "pay_none", "pay_pending", "pay_rejected", "report_rate", "report_fb", "closed"])
+                ["open", "pay_none", "pay_pending", "pay_partial", "pay_rejected", "report_rate", "report_fb", "closed"])
 
 LABELS = {"lang": "Til tanlash", "age": "Yosh savoli", "who": "“Kimsiz?” (o‘zi yozadi)", "filter": "Kimligi (filtr)",
           "guess": "O‘z taxmini savoli",
           "rating": "Natijaga baho bermadi", "wrong": "“Noto‘g‘ri qism” savoli", "offer": "Pullik taklif: qaror qilmadi",
           "declined": "Pullik taklifni rad etdi", "open": "Ochiq savollar (orzu/ikkilanish)",
           "pay_none": "Savollar tugadi, chek yubormadi", "pay_pending": "Chek yubordi, tasdiq kutilmoqda",
-          "pay_rejected": "To‘lov rad etilgan", "report_rate": "Hisobot oldi, baho bermadi",
+          "pay_rejected": "To‘lov rad etilgan", "pay_partial": "To‘liq summa to‘lanmagan", "report_rate": "Hisobot oldi, baho bermadi",
           "report_fb": "Hisobotga baho berdi, fikr yozmadi", "closed": "✅ To‘liq yakunladi"}
 
 
@@ -181,7 +181,7 @@ def step_key(row, data: dict) -> str:
         if data.get("phase") != "paid":
             return "declined"
         pay = data.get("pay")
-        return {"pending": "pay_pending", "rejected": "pay_rejected"}.get(pay, "pay_none")
+        return {"pending": "pay_pending", "rejected": "pay_rejected", "partial": "pay_partial"}.get(pay, "pay_none")
     if st in ("report_rate", "report_fb"):
         return st
     return "closed"

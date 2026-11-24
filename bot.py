@@ -128,8 +128,39 @@ T = {
                      "Savol bo‘lsa, shu chatga yozing.",
                "ru": "К сожалению, оплата не найдена ❌\n\nПроверьте сумму и номер карты и отправьте чек ещё раз. "
                      "Если есть вопросы — напишите в этот чат."},
-    "answers_saved": {"uz": "Rahmat! Javoblaringiz saqlandi ✅\n\nTo‘lov tasdiqlangach, hisobotingiz shu yerga keladi.",
-                      "ru": "Спасибо! Ответы сохранены ✅\n\nПосле подтверждения оплаты отчёт придёт сюда."},
+    "answers_saved": {
+        "uz": "🎉 Barcha savollarga javob berdingiz! Shaxsiy hisobotingiz tayyor turibdi.\n\n"
+              "<b>Hisobotda nimalar bor:</b>\n"
+              "• sizga mos 6 ta yo‘nalish va nega aynan ular\n"
+              "• fanlaringiz shu yo‘nalishlarga mosmi\n"
+              "• siz uchun qulay ish muhiti\n"
+              "• ikkilanishlaringizga maslahat va shaxsiy izoh\n"
+              "• 2 haftalik sinov rejasi va ota-onangiz uchun sahifa\n\n"
+              "<b>Hisobotni olish uchun keyingi qadam:</b>\n"
+              "1️⃣ Quyidagi kartaga to‘lov qiling\n"
+              "2️⃣ Chek rasmini (skrinshotini) shu chatga yuboring\n"
+              "3️⃣ To‘lov tasdiqlanishi bilan hisobot <b>darhol</b> shu yerga keladi\n\n{pay}",
+        "ru": "🎉 Вы ответили на все вопросы! Ваш персональный отчёт готов.\n\n"
+              "<b>Что в отчёте:</b>\n"
+              "• 6 подходящих направлений и почему именно они\n"
+              "• подходят ли ваши предметы к этим направлениям\n"
+              "• комфортная для вас рабочая среда\n"
+              "• советы по вашим сомнениям и персональный комментарий\n"
+              "• план проб на 2 недели и страница для родителей\n\n"
+              "<b>Следующий шаг, чтобы получить отчёт:</b>\n"
+              "1️⃣ Оплатите на карту ниже\n"
+              "2️⃣ Отправьте фото (скриншот) чека в этот чат\n"
+              "3️⃣ Сразу после подтверждения оплаты отчёт <b>моментально</b> придёт сюда\n\n{pay}"},
+    "answers_saved_pending": {
+        "uz": "🎉 Barcha savollarga javob berdingiz! Chekingiz tekshirilmoqda: to‘lov tasdiqlanishi bilan hisobotingiz darhol shu yerga keladi.",
+        "ru": "🎉 Вы ответили на все вопросы! Ваш чек проверяется: сразу после подтверждения оплаты отчёт придёт сюда."},
+    "pay_partial": {
+        "uz": "To‘lovingiz uchun rahmat! 🙏 Lekin chekdagi summa hisobot narxidan kamroq ekan.\n\n"
+              "Hisobot narxi: <b>{price}</b>. Qolgan summani shu kartaga o‘tkazib, yangi chekni shu chatga yuboring. "
+              "Tasdiqlanishi bilan hisobot darhol keladi.\n\n{pay}",
+        "ru": "Спасибо за оплату! 🙏 Но сумма в чеке меньше стоимости отчёта.\n\n"
+              "Стоимость отчёта: <b>{price}</b>. Переведите оставшуюся сумму на эту карту и отправьте новый чек в этот чат. "
+              "Сразу после подтверждения отчёт придёт.\n\n{pay}"},
     "report_wait": {"uz": "⏳ Hisobotingiz tayyorlanmoqda...", "ru": "⏳ Готовим ваш отчёт..."},
     "report_rate": {"uz": "Hisobot sizga qanchalik to‘g‘ri va foydali bo‘ldi?\n1 — umuman yo‘q, 5 — juda foydali",
                     "ru": "Насколько отчёт оказался точным и полезным?\n1 — совсем нет, 5 — очень полезен"},
@@ -457,7 +488,10 @@ async def save_open(msg: Message, sid: int, text: str | None, bot: Bot):
         if data.get("pay") == "ok":
             await deliver_report(bot, sid)
         else:
-            await msg.answer(T["answers_saved"][lang])
+            if data.get("pay") == "pending":
+                await msg.answer(T["answers_saved_pending"][lang])
+            else:
+                await msg.answer(T["answers_saved"][lang].format(pay=pay_text(lang)))
             await notify_admins(bot, sid, "📝 16 ta savolga javob berdi (to‘lov hali tasdiqlanmagan)")
 
 
@@ -613,7 +647,8 @@ async def on_receipt(message: Message):
     data["pay"] = "pending"
     db.save(last["id"], receipt=1, data=data)
     who = (f"@{last['username']}, " if last["username"] else "") + f"id {last['user_id']}"
-    buttons = kb([[("✅ Pul tushdi", "ok"), ("❌ Tushmadi", "no")]], f"pay:{last['id']}")
+    buttons = kb([[("✅ Pul tushdi", "ok"), ("❌ Tushmadi", "no")],
+                  [("⚠️ To‘liq summa tushmadi", "part")]], f"pay:{last['id']}")
     for aid in ADMIN_IDS:
         try:
             await message.forward(aid)
@@ -642,10 +677,10 @@ async def on_pay_decision(cb: CallbackQuery):
         await cb.answer("Bu to‘lov allaqachon tasdiqlangan", show_alert=True)
         return
     lang = data.get("lang", "uz")
-    data["pay"] = "ok" if val == "ok" else "rejected"
+    data["pay"] = {"ok": "ok", "part": "partial"}.get(val, "rejected")
     db.save(sid, data=data)
     await cb.answer()
-    mark = "✅ Tasdiqlandi" if val == "ok" else "❌ Rad etildi"
+    mark = {"ok": "✅ Tasdiqlandi", "part": "⚠️ To‘liq summa tushmadi"}.get(val, "❌ Rad etildi")
     try:
         await cb.message.edit_text(cb.message.html_text.split("\n\nKarta tarixini")[0] +
                                    f"\n\n{mark} ({html.escape(cb.from_user.first_name or '')})")
@@ -656,6 +691,9 @@ async def on_pay_decision(cb: CallbackQuery):
         if row["stage"] in ("paid_q", "dream", "doubt"):
             await cb.bot.send_message(row["user_id"], T["pay_ok_wait_q"][lang])
         await on_paid_confirmed(cb.bot, sid)
+    elif val == "part":
+        await cb.bot.send_message(row["user_id"], T["pay_partial"][lang].format(
+            price=html.escape(PRICE_TEXT or "—"), pay=pay_text(lang)))
     else:
         await cb.bot.send_message(row["user_id"], T["pay_no"][lang])
 
@@ -965,7 +1003,7 @@ async def send_reminder(bot: Bot, row, data: dict) -> str | None:
         text = E["rem_open"][lang].format(name=name)
         markup = kb([[(E["btn_continue"][lang], "cont")]], f"rem:{sid}")
         key = "open"
-    elif st == "done" and data.get("phase") == "paid" and data.get("pay") is None:
+    elif st == "done" and data.get("phase") == "paid" and data.get("pay") in (None, "partial"):
         text = E["rem_pay"][lang].format(name=name)
         markup = kb([[(E["btn_pay"][lang], "pay")]], f"rem:{sid}")
         key = "pay"
