@@ -6,12 +6,14 @@ import html
 from questions import (SCALE5, SCALE7, INTEREST, TIPI, TIPI_PREFIX, AGE, FILTER, SUBJECTS, FIELD,
                        VALUES, FORMAT, DIFFICULTY, SELF_GUESS)
 
-TOTAL = 45  # filtr + 30 + 10 + 4
+FREE_TOTAL = 30   # qiziqish savollari (hamma uchun)
+PAID_TOTAL = 14   # xarakter 10 + kontekst 4 (pullik hisobot tanlaganlar uchun)
 
 UI = {
     "next": {"uz": "Tayyor ➡️", "ru": "Готово ➡️"},
     "back": {"uz": "⬅️ Orqaga", "ru": "⬅️ Назад"},
     "q": {"uz": "Savol", "ru": "Вопрос"},
+    "qx": {"uz": "Qo‘shimcha savol", "ru": "Доп. вопрос"},
     "interest_head": {"uz": "Qiziqishlar", "ru": "Интересы"},
     "interest_ask": {"uz": "Bu ish sizga qanchalik yoqadi?", "ru": "Насколько вам нравится это занятие?"},
     "interest_hint": {
@@ -29,24 +31,28 @@ UI = {
 }
 
 
-def build_steps(filter_code: str | None) -> list[str]:
+def build_steps(filter_code: str | None, phase: str = "free") -> list[str]:
+    """free: hamma uchun 30 ta savol; paid: pullik hisobot uchun qo'shimcha 14 ta savol."""
+    if phase == "paid":
+        steps = [f"tipi{i}" for i in range(10)]
+        steps += ["field" if filter_code == "D" else "subjects", "values", "format", "difficulty"]
+        return steps
     steps = ["lang", "age", "filter"]
     steps += [f"int{i}" for i in range(30)]
-    steps += [f"tipi{i}" for i in range(10)]
-    steps += ["field" if filter_code == "D" else "subjects", "values", "format", "difficulty", "guess"]
+    steps += ["guess"]
     return steps
 
 
-def numbered(step: str) -> int | None:
-    """Foydalanuvchiga ko'rinadigan savol raqami (1..45)."""
-    if step == "filter":
-        return 1
+def numbered(step: str) -> tuple[int, int, str] | None:
+    """Ko'rinadigan raqam: (raqam, jami, turi)."""
     if step.startswith("int"):
-        return 2 + int(step[3:])
+        return 1 + int(step[3:]), FREE_TOTAL, "q"
     if step.startswith("tipi"):
-        return 32 + int(step[4:])
-    order = {"subjects": 42, "field": 42, "values": 43, "format": 44, "difficulty": 45}
-    return order.get(step)
+        return 1 + int(step[4:]), PAID_TOTAL, "qx"
+    order = {"subjects": 11, "field": 11, "values": 12, "format": 13, "difficulty": 14}
+    if step in order:
+        return order[step], PAID_TOTAL, "qx"
+    return None
 
 
 CHOICE = {"age": AGE, "filter": FILTER, "subjects": SUBJECTS, "field": FIELD, "values": VALUES,
@@ -59,8 +65,8 @@ def render(step: str, lang: str, data: dict) -> tuple[str, list[list[tuple[str, 
     if step == "lang":
         return ("Tilni tanlang / Выберите язык", [[("🇺🇿 O‘zbekcha", "uz"), ("🇷🇺 Русский", "ru")]])
 
-    n = numbered(step)
-    head = f"<b>{UI['q'][lang]} {n}/{TOTAL}</b>" if n else ""
+    num = numbered(step)
+    head = f"<b>{UI[num[2]][lang]} {num[0]}/{num[1]}</b>" if num else ""
     back = [[(UI["back"][lang], "__back")]] if step not in ("lang",) else []
 
     if step.startswith("int"):
@@ -98,11 +104,11 @@ def render(step: str, lang: str, data: dict) -> tuple[str, list[list[tuple[str, 
     return text, rows + back
 
 
-def apply(steps: list[str], pos: int, data: dict, value: str) -> tuple[int, dict, str | None]:
+def apply(steps: list[str], pos: int, data: dict, value: str, min_pos: int = 1) -> tuple[int, dict, str | None]:
     """Javobni qo'llaydi. Qaytaradi: (yangi pozitsiya, data, xato_xabari)."""
     step = steps[pos]
     if value == "__back":
-        return max(pos - 1, 1), data, None   # tilga qaytmaymiz
+        return max(pos - 1, min_pos), data, None   # bepul qismda tilga qaytmaymiz
 
     if step == "lang":
         if value not in ("uz", "ru"):

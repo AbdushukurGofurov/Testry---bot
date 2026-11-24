@@ -37,11 +37,11 @@ dp = Dispatcher()
 T = {
     "welcome": {
         "uz": ("Salom, {name}! 👋\n\nBu test qiziqishlaringizni aniqlab, sizga mos yo‘nalishlarni ko‘rsatadi.\n"
-               "⏱ 7–8 daqiqa · 45 ta savol · natija darhol\n\n"
+               "⏱ 4 daqiqa · 30 ta savol · natija darhol\n\n"
                "To‘g‘ri yoki noto‘g‘ri javob yo‘q — o‘zingizga eng yaqinini tanlang.\n\n"
                "<i>Test O*NET va TIPI materiallari asosida moslashtirilgan. O‘zgartirishlar va ogohlantirishlar: /about</i>"),
         "ru": ("Привет, {name}! 👋\n\nЭтот тест определит ваши интересы и покажет подходящие направления.\n"
-               "⏱ 7–8 минут · 45 вопросов · результат сразу\n\n"
+               "⏱ 4 минуты · 30 вопросов · результат сразу\n\n"
                "Правильных и неправильных ответов нет — выбирайте то, что ближе вам.\n\n"
                "<i>Тест адаптирован на основе материалов O*NET и TIPI. Изменения и оговорки: /about</i>"),
     },
@@ -65,6 +65,7 @@ T = {
                "✓ Kasb tanlashdagi ikkilanishingizga alohida javob\n"
                "✓ 2 haftalik sinov rejasi\n"
                "✓ Ota-onangiz uchun alohida sahifa\n\n"
+               "Hisobot aniq chiqishi uchun yana 16 ta qisqa savolga javob berasiz (~3 daqiqa). "
                "Hisobotni mutaxassisimiz 24 soat ichida tayyorlaydi.{price}"),
         "ru": ("📘 <b>Полный отчёт</b>\n\n"
                "✓ 3–5 подходящих направлений и почему именно они\n"
@@ -73,6 +74,7 @@ T = {
                "✓ Отдельный ответ на ваши сомнения в выборе профессии\n"
                "✓ План проб на 2 недели\n"
                "✓ Отдельная страница для родителей\n\n"
+               "Для точного отчёта ответьте ещё на 16 коротких вопросов (~3 минуты). "
                "Отчёт подготовит наш специалист в течение 24 часов.{price}"),
     },
     "price": {"uz": "\n\n💳 Narxi: <b>{}</b>", "ru": "\n\n💳 Стоимость: <b>{}</b>"},
@@ -85,8 +87,10 @@ T = {
     "pay_link": {"uz": "To‘lov havolasi: {}\n\n", "ru": "Ссылка на оплату: {}\n\n"},
     "pay_manual": {"uz": "Tez orada administratorimiz siz bilan bog‘lanib, to‘lov tafsilotlarini yuboradi.\n\n",
                    "ru": "Скоро наш администратор свяжется с вами и отправит детали оплаты.\n\n"},
-    "open_intro": {"uz": "Hisobot aniqroq bo‘lishi uchun 2 ta qisqa savol (ixtiyoriy):",
-                   "ru": "Чтобы отчёт был точнее, 2 коротких вопроса (необязательно):"},
+    "paid_intro": {"uz": "Endi hisobotingizni shaxsiylashtiramiz: 14 ta tugmali savol va 2 ta ochiq savol (~3 daqiqa). 👇",
+                   "ru": "Теперь сделаем отчёт персональным: 14 вопросов с кнопками и 2 открытых (~3 минуты). 👇"},
+    "open_intro": {"uz": "Deyarli tayyor! Oxirgi 2 ta savol (ixtiyoriy, lekin hisobotni ancha aniq qiladi):",
+                   "ru": "Почти готово! Последние 2 вопроса (необязательно, но делают отчёт точнее):"},
     "skip": {"uz": "O‘tkazib yuborish", "ru": "Пропустить"},
     "thanks_end": {"uz": "Rahmat! Javoblaringiz saqlandi. ✅\n\nTestni qayta topshirish: /start",
                    "ru": "Спасибо! Ваши ответы сохранены. ✅\n\nПройти тест заново: /start"},
@@ -118,7 +122,7 @@ async def show_step(target, sid: int, edit: bool):
     row = db.get(sid)
     data = db.data_of(row)
     lang = data.get("lang", "uz")
-    steps = flow.build_steps(data.get("filter"))
+    steps = flow.build_steps(data.get("filter"), data.get("phase", "free"))
     pos = row["pos"]
     step = steps[pos]
     text, rows = flow.render(step, lang, data)
@@ -169,11 +173,13 @@ async def on_answer(cb: CallbackQuery):
         return
     data = db.data_of(row)
     lang = data.get("lang", "uz")
-    if row["finished_at"] is not None or row["pos"] != pos:
+    phase = data.get("phase", "free")
+    active = (row["finished_at"] is None) if phase == "free" else (row["stage"] == "paid_q")
+    if not active or row["pos"] != pos:
         await cb.answer(T["stale"][lang])
         return
-    steps = flow.build_steps(data.get("filter"))
-    new_pos, data, err = flow.apply(steps, pos, data, value)
+    steps = flow.build_steps(data.get("filter"), phase)
+    new_pos, data, err = flow.apply(steps, pos, data, value, min_pos=1 if phase == "free" else 0)
     lang = data.get("lang", "uz")
     if err == "empty":
         await cb.answer(T["empty"][lang], show_alert=True)
@@ -183,11 +189,14 @@ async def on_answer(cb: CallbackQuery):
         return
     if data.get("first_answer_at") is None and steps[pos].startswith("int"):
         data["first_answer_at"] = int(time.time())
-    steps = flow.build_steps(data.get("filter"))
+    steps = flow.build_steps(data.get("filter"), phase)
     db.save(sid, data=data, pos=new_pos)
     await cb.answer()
     if new_pos >= len(steps):
-        await finish(cb, sid)
+        if phase == "free":
+            await finish(cb, sid)
+        else:
+            await finish_paid(cb, sid)
     elif new_pos == 1 and steps[pos] == "lang":
         name = html.escape(cb.from_user.first_name or "")
         await cb.message.edit_text(T["welcome"][lang].format(name=name))
@@ -203,7 +212,6 @@ async def finish(cb: CallbackQuery, sid: int):
     await cb.message.edit_text(T["calc"][lang])
     name = html.escape(cb.from_user.first_name or "")
     text, meta = scoring.free_result(name, data["interest"], lang)
-    meta["tipi"] = scoring.tipi_scores(data["tipi"])
     meta["guess_match"] = scoring.guess_match(data.get("guess", []), meta["top"]) if meta["kind"] == "normal" else None
     db.save(sid, result=meta, finished_at=int(time.time()), stage="rating")
 
@@ -298,11 +306,25 @@ async def on_offer(cb: CallbackQuery):
         db.save(sid, stage="done")
         await cb.message.answer(T["declined"][lang])
         return
-    db.save(sid, paid_click=1, stage="dream")
+    data = db.data_of(row)
+    data["phase"] = "paid"
+    db.save(sid, paid_click=1, stage="paid_q", data=data, pos=0)
     pay = T["pay_link"][lang].format(PAYMENT_URL) if PAYMENT_URL else T["pay_manual"][lang]
     await cb.message.answer(T["pay_info"][lang].format(pay=pay))
     await notify_admins(cb.bot, sid, "💰 Pullik hisobotni bosdi")
-    await cb.message.answer(T["open_intro"][lang])
+    await cb.message.answer(T["paid_intro"][lang])
+    await show_step(cb.message, sid, edit=False)
+
+
+async def finish_paid(cb: CallbackQuery, sid: int):
+    import json
+    row = db.get(sid)
+    data = db.data_of(row)
+    lang = data.get("lang", "uz")
+    res = json.loads(row["result"]) if row["result"] else {}
+    res["tipi"] = scoring.tipi_scores(data["tipi"])
+    db.save(sid, result=res, stage="dream")
+    await cb.message.edit_text(T["open_intro"][lang])
     await cb.message.answer("1/2 · " + OPEN_DREAM[lang], reply_markup=kb([[(T["skip"][lang], "skip")]], f"o:{sid}"))
 
 
