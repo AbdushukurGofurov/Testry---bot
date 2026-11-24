@@ -452,6 +452,7 @@ def _ai_prompt(data: dict, res: dict, lang: str) -> str:
         "- Ballar, fanlar va qadriyatlar o‘rtasidagi mos kelish yoki ziddiyatni ochiq ayt.\n"
         "- Tavsiya etilgan yo‘nalishlardan 1–2 tasini nomlab, nega mosligini tushuntir.\n"
         "- Bitta aniq keyingi qadam bilan yakunla.\n"
+        "- Doim hurmat bilan, iliq va ijobiy ohangda yoz: tanqid qilma, ruhlantir.\n"
         "- Kafolat berma, OTM nomlari, ballar, maosh raqamlari va faktlarni to‘qima.\n"
         "- Faqat oddiy matn: markdown, sarlavha va ro‘yxat ishlatma.\n\n"
         + json.dumps(facts, ensure_ascii=False)

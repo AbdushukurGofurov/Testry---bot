@@ -62,16 +62,25 @@ def init():
             retest_of INTEGER,
             retest_invited INTEGER DEFAULT 0
         )""")
+    # keyin qo'shilgan ustun: oxirgi faollik vaqti (eslatmalar uchun)
+    try:
+        with conn() as c:
+            if PG:
+                c.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS updated_at BIGINT")
+            else:
+                c.execute("ALTER TABLE sessions ADD COLUMN updated_at INTEGER")
+    except Exception:
+        pass
 
 
 def new_session(user_id, username, first_name, ref=None):
     with conn() as c:
         prev = c.execute("SELECT id FROM sessions WHERE user_id=? AND finished_at IS NOT NULL "
                          "ORDER BY id DESC LIMIT 1", (user_id,)).fetchone()
-        row = c.execute("INSERT INTO sessions(user_id, username, first_name, ref, started_at, retest_of) "
-                        "VALUES (?,?,?,?,?,?) RETURNING id",
+        row = c.execute("INSERT INTO sessions(user_id, username, first_name, ref, started_at, retest_of, updated_at) "
+                        "VALUES (?,?,?,?,?,?,?) RETURNING id",
                         (user_id, username, first_name, ref, int(time.time()),
-                         prev["id"] if prev else None)).fetchone()
+                         prev["id"] if prev else None, int(time.time()))).fetchone()
         return row["id"]
 
 
@@ -85,7 +94,10 @@ def get(sid):
         return c.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
 
 
-def save(sid, **fields):
+def save(sid, touch=True, **fields):
+    """touch=True: foydalanuvchi harakati sifatida oxirgi faollik vaqtini yangilaydi."""
+    if touch:
+        fields["updated_at"] = int(time.time())
     if "data" in fields:
         fields["data"] = json.dumps(fields["data"], ensure_ascii=False)
     if "result" in fields:
@@ -111,3 +123,11 @@ def retest_candidates(days=14):
             WHERE s.finished_at IS NOT NULL AND s.finished_at < ? AND s.retest_invited = 0
             AND NOT EXISTS (SELECT 1 FROM sessions t WHERE t.user_id = s.user_id AND t.id > s.id)""",
                          (cutoff,)).fetchall()
+
+
+def latest_per_user():
+    """Har bir foydalanuvchining eng oxirgi urinishi."""
+    with conn() as c:
+        return c.execute("""SELECT s.* FROM sessions s
+            WHERE NOT EXISTS (SELECT 1 FROM sessions t WHERE t.user_id = s.user_id AND t.id > s.id)
+            ORDER BY s.id""").fetchall()

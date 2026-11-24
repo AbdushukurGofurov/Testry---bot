@@ -14,15 +14,17 @@ from urllib.parse import quote
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup,
                            Message)
 
 import db
+import engage
 import flow
 import report
 import scoring
+from engage import E
 from questions import (DIFFICULTY, FIELD, FORMAT, SUBJECTS, VALUES, FILTER, INTEREST, LICENSE_NOTICE, OPEN_DOUBT, OPEN_DREAM, PAIRS, TIPI, WRONG_PART,
                        pair_key)
 
@@ -56,8 +58,8 @@ T = {
     "empty": {"uz": "Kamida bittasini tanlang", "ru": "Выберите хотя бы один вариант"},
     "calc": {"uz": "⏳ Natijangiz hisoblanmoqda...", "ru": "⏳ Считаем результат..."},
     "share": {"uz": "📤 Do‘stlarga ulashish", "ru": "📤 Поделиться с друзьями"},
-    "share_text": {"uz": "Men Testry’da qiziqishlarimni aniqladim. Sen ham sinab ko‘r!",
-                   "ru": "Я определил(а) свои интересы в Testry. Попробуй и ты!"},
+    "share_text": {"uz": "Men Testry’da qiziqishlarimni aniqladim. Siz ham sinab ko‘ring!",
+                   "ru": "Я определил(а) свои интересы в Testry. Попробуйте и вы!"},
     "rate": {"uz": "Natija sizni qanchalik to‘g‘ri tasvirladi?\n1 — umuman noto‘g‘ri, 5 — juda to‘g‘ri",
              "ru": "Насколько точно результат вас описал?\n1 — совсем неверно, 5 — очень точно"},
     "offer": {
@@ -172,6 +174,10 @@ async def show_step(target, sid: int, edit: bool):
 async def on_start(message: Message, command: CommandObject):
     db.init()
     u = message.from_user
+    arg = command.args if command and command.args else ""
+    if arg.startswith("par"):
+        await open_parent_page(message, arg)
+        return
     last = db.latest(u.id)
     if last and last["finished_at"] is None and last["pos"] > 1:
         lang = lang_of(last)
@@ -341,15 +347,7 @@ async def on_offer(cb: CallbackQuery):
     data = db.data_of(row)
     data["phase"] = "paid"
     db.save(sid, paid_click=1, stage="paid_q", data=data, pos=0)
-    if PAYMENT_URL:
-        pay = T["pay_link"][lang].format(PAYMENT_URL)
-    elif CARD_NUMBER:
-        card = " ".join(CARD_NUMBER.replace(" ", "")[i:i + 4] for i in range(0, len(CARD_NUMBER.replace(" ", "")), 4))
-        pay = T["pay_card"][lang].format(price=html.escape(PRICE_TEXT or "—"), card=card,
-                                         holder=html.escape(CARD_HOLDER or "—"))
-    else:
-        pay = T["pay_manual"][lang]
-    await cb.message.answer(T["pay_info"][lang].format(pay=pay))
+    await cb.message.answer(T["pay_info"][lang].format(pay=pay_text(lang)))
     await notify_admins(cb.bot, sid, "💰 Pullik hisobotni bosdi")
     await cb.message.answer(T["paid_intro"][lang])
     await show_step(cb.message, sid, edit=False)
@@ -457,7 +455,8 @@ async def on_export(message: Message):
             [f"tipi{i + 1}_{TIPI[i][0]}{'_R' if TIPI[i][1] else ''}" for i in range(10)] +
             ["subjects", "field", "values", "format", "difficulty", "guess", "R", "I", "A", "S", "E", "C",
              "profile", "top", "guess_match", "ext", "agr", "con", "emo", "opn", "rating", "wrong",
-             "paid_click", "receipt", "open_dream", "open_doubt", "pay", "report_rating", "report_feedback"])
+             "paid_click", "receipt", "open_dream", "open_doubt", "pay", "report_rating", "report_feedback",
+             "last_step", "last_active", "reminded", "plan_answers", "chosen_direction", "parent_opened"])
     w.writerow(head)
     import json
     for r in db.all_rows():
@@ -476,7 +475,9 @@ async def on_export(message: Message):
                    [round(tp[k], 1) if k in tp else None for k in ("ext", "agr", "con", "emo", "opn")] +
                    [r["rating"], ";".join(d.get("wrong", [])), r["paid_click"], r["receipt"],
                     d.get("open_dream"), d.get("open_doubt"), d.get("pay"), d.get("report_rating"),
-                    d.get("report_feedback")])
+                    d.get("report_feedback"), engage.step_label(engage.step_key(r, d)), engage.last_active(r),
+                    d.get("rem"), json.dumps(d.get("fu_answers", {})), d.get("chosen_direction"),
+                    len(d.get("parent_opened", []))])
     data = buf.getvalue().encode("utf-8-sig")
     await message.answer_document(BufferedInputFile(data, filename=f"testry_{time.strftime('%Y%m%d_%H%M')}.csv"))
 
@@ -492,7 +493,7 @@ async def on_retest(message: Message):
             sent += 1
         except Exception:
             pass
-        db.save(r["id"], retest_invited=1)
+        db.save(r["id"], touch=False, retest_invited=1)
         await asyncio.sleep(0.05)
     await message.answer(f"Qayta test taklifi yuborildi: {sent} kishiga")
 
@@ -506,7 +507,7 @@ async def notify_admins(bot: Bot, sid: int, title: str):
     top = res.get("top", [])
     pair = PAIRS[pair_key(*top)][0] if res.get("kind") == "normal" else res.get("kind")
     env = scoring.env_lines(res.get("tipi", {}), "uz") if res.get("tipi") else []
-    who = f"@{row['username']}" if row["username"] else f"id {row['user_id']}"
+    who = (f"@{row['username']}, " if row["username"] else "") + f"id {row['user_id']}"
     filt = dict((o[0], o[1]) for o in FILTER["options"]).get(d.get("filter"), "")
 
     def labels(q, codes):
@@ -541,7 +542,7 @@ async def on_receipt(message: Message):
         return
     data["pay"] = "pending"
     db.save(last["id"], receipt=1, data=data)
-    who = f"@{last['username']}" if last["username"] else f"id {last['user_id']}"
+    who = (f"@{last['username']}, " if last["username"] else "") + f"id {last['user_id']}"
     buttons = kb([[("✅ Pul tushdi", "ok"), ("❌ Tushmadi", "no")]], f"pay:{last['id']}")
     for aid in ADMIN_IDS:
         try:
@@ -615,6 +616,7 @@ async def deliver_report(bot: Bot, sid: int, to: int | None = None) -> bool:
         await asyncio.sleep(0.3)
     if to is not None:
         return True
+    await send_parent_offer(bot, chat, sid, lang)
     data["report_sent"] = int(time.time())
     db.save(sid, data=data, stage="report_rate")
     await bot.send_message(chat, T["report_rate"][lang],
@@ -688,6 +690,9 @@ async def on_report_preview(message: Message, command: CommandObject):
 
 @dp.message(F.text & ~F.text.startswith("/"))
 async def on_text(message: Message):
+    if is_admin(message.from_user.id) and message.reply_to_message:
+        if await relay_admin_reply(message):
+            return
     last = db.latest(message.from_user.id)
     if last and last["stage"] in ("dream", "doubt"):
         await save_open(message, last["id"], message.text[:2000], message.bot)
@@ -695,13 +700,301 @@ async def on_text(message: Message):
     if last and last["stage"] == "report_fb":
         await save_report_feedback(message.bot, last["id"], message.text[:2000], message.from_user.id)
         return
-    # boshqa matnlar: fikr-mulohaza sifatida adminlarga
+    if last and last["stage"] == "fu_text":
+        data = db.data_of(last)
+        data["chosen_direction"] = message.text[:500]
+        db.save(last["id"], data=data, stage="closed")
+        await message.answer(E["fu_text_thanks"][data.get("lang", "uz")])
+        await admin_note(message.bot, f"🎯 Yo‘nalishini tanladi: sessiya #{last['id']} · "
+                                      f"{html.escape(message.from_user.first_name or '')}, id {message.from_user.id}\n"
+                                      f"«{html.escape(message.text[:500])}»")
+        return
+    # boshqa matnlar: xushmuomala javob + adminlarga (admin “Reply” qilib javob yozishi mumkin)
+    lang = lang_of(last) if last else "uz"
+    await message.answer(E["ack"][lang])
+    await admin_note(message.bot, f"💬 Xabar ({html.escape(message.from_user.first_name or '')}, "
+                                  f"id {message.from_user.id}):\n{html.escape(message.text[:2000])}\n\n"
+                                  "<i>Javob berish uchun shu xabarga “Reply” qilib yozing.</i>")
+
+
+async def admin_note(bot: Bot, text: str, markup=None):
     for aid in ADMIN_IDS:
         try:
-            await message.bot.send_message(aid, f"💬 Fikr ({html.escape(message.from_user.first_name or '')}, "
-                                                f"id {message.from_user.id}):\n{html.escape(message.text[:2000])}")
+            await bot.send_message(aid, text, reply_markup=markup)
         except Exception:
             pass
+
+
+async def relay_admin_reply(message: Message) -> bool:
+    """Admin bot xabariga “Reply” qilsa, javob o‘sha foydalanuvchiga yuboriladi."""
+    import re
+    src = message.reply_to_message
+    if not src or not (src.text or src.caption):
+        return False
+    m = re.search(r"\bid (\d{4,})", src.text or src.caption)
+    if not m:
+        return False
+    uid = int(m.group(1))
+    last = db.latest(uid)
+    lang = lang_of(last) if last else "uz"
+    try:
+        await message.bot.send_message(uid, E["admin_reply"][lang].format(text=html.escape(message.text[:3500])))
+        await message.answer("✅ Javob yuborildi")
+    except Exception as e:
+        await message.answer(f"Yuborilmadi: {html.escape(str(e))[:200]}")
+    return True
+
+
+def pay_text(lang: str) -> str:
+    if PAYMENT_URL:
+        return T["pay_link"][lang].format(PAYMENT_URL)
+    if CARD_NUMBER:
+        digits = CARD_NUMBER.replace(" ", "")
+        card = " ".join(digits[i:i + 4] for i in range(0, len(digits), 4))
+        return T["pay_card"][lang].format(price=html.escape(PRICE_TEXT or "—"), card=card,
+                                          holder=html.escape(CARD_HOLDER or "—"))
+    return T["pay_manual"][lang]
+
+
+# ---------------- Ota-onaga ulashish ----------------
+
+async def send_parent_offer(bot: Bot, chat: int, sid: int, lang: str):
+    me = await bot.me()
+    link = f"https://t.me/{me.username}?start={engage.parent_param(sid, BOT_TOKEN)}"
+    url = f"https://t.me/share/url?url={quote(link)}&text={quote(E['parent_share_text'][lang])}"
+    await bot.send_message(chat, E["parent_offer"][lang], reply_markup=InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=E["parent_btn"][lang], url=url)]]))
+
+
+async def open_parent_page(message: Message, arg: str):
+    import json
+    sid = engage.parse_parent_param(arg, BOT_TOKEN)
+    row = db.get(sid) if sid else None
+    data = db.data_of(row) if row else {}
+    lang = data.get("lang", "uz")
+    if not row or not data.get("report_sent") or not row["result"]:
+        await message.answer(E["parent_bad"][lang])
+        return
+    res = json.loads(row["result"])
+    child = html.escape(row["first_name"] or "")
+    await message.answer(E["parent_hello"][lang].format(child=child) + "\n\n" +
+                         report.section_parents(res, data, lang))
+    await message.answer(E["parent_try"][lang])
+    opened = data.get("parent_opened", [])
+    if message.from_user.id not in opened and message.from_user.id != row["user_id"]:
+        opened.append(message.from_user.id)
+        data["parent_opened"] = opened
+        db.save(sid, touch=False, data=data)
+        try:
+            await message.bot.send_message(row["user_id"], E["child_parent_opened"][lang])
+        except Exception:
+            pass
+        await admin_note(message.bot, f"👨‍👩‍👧 Ota-ona sahifani ochdi: sessiya #{sid} ({child})")
+
+
+# ---------------- Eslatmalar va reja bo‘yicha so‘rovlar ----------------
+
+@dp.callback_query(F.data.startswith("rem:"))
+async def on_reminder_button(cb: CallbackQuery):
+    _, sid, kind = cb.data.split(":")
+    sid = int(sid)
+    row = db.get(sid)
+    await cb.answer()
+    if not row or row["user_id"] != cb.from_user.id:
+        return
+    data = db.data_of(row)
+    lang = data.get("lang", "uz")
+    await cb.message.edit_reply_markup(reply_markup=None)
+    st = row["stage"]
+    if kind == "cont" and row["finished_at"] is None:
+        await show_step(cb.message, sid, edit=False)
+    elif kind == "cont" and st == "paid_q":
+        await show_step(cb.message, sid, edit=False)
+    elif kind == "cont" and st == "dream":
+        await cb.message.answer("1/2 · " + OPEN_DREAM[lang], reply_markup=kb([[(T["skip"][lang], "skip")]], f"o:{sid}"))
+    elif kind == "cont" and st == "doubt":
+        await cb.message.answer("2/2 · " + OPEN_DOUBT[lang], reply_markup=kb([[(T["skip"][lang], "skip")]], f"o:{sid}"))
+    elif kind == "offer" and st in ("rating", "wrong", "offer"):
+        db.save(sid, stage="offer")
+        await show_offer(cb.message, sid)
+    elif kind == "pay" and st == "done" and data.get("phase") == "paid" and data.get("pay") != "ok":
+        await cb.message.answer(T["pay_info"][lang].format(pay=pay_text(lang)))
+    else:
+        await cb.message.answer(E["gone"][lang])
+
+
+@dp.callback_query(F.data.startswith("fu:"))
+async def on_followup_button(cb: CallbackQuery):
+    _, sid, idx, val = cb.data.split(":")
+    sid = int(sid)
+    row = db.get(sid)
+    await cb.answer()
+    if not row or row["user_id"] != cb.from_user.id:
+        return
+    data = db.data_of(row)
+    lang = data.get("lang", "uz")
+    answers = data.get("fu_answers", {})
+    answers[idx] = val
+    data["fu_answers"] = answers
+    stage = "fu_text" if val == "chosen" else row["stage"]
+    db.save(sid, data=data, stage=stage)
+    labels = {v: t for t, v in E["fu_btn"][int(idx)][lang]}
+    try:
+        await cb.message.edit_text(cb.message.html_text + f"\n\n<b>{labels.get(val, val)}</b>")
+    except TelegramBadRequest:
+        pass
+    await cb.message.answer(E["fu_reply"][val][lang])
+    who = (f"@{row['username']}, " if row["username"] else "") + f"id {row['user_id']}"
+    await admin_note(cb.bot, f"📅 Reja so‘rovi ({[3, 7, 14][int(idx)]}-kun): sessiya #{sid} · "
+                             f"{html.escape(row['first_name'] or '')} ({who})\nJavob: {labels.get(val, val)}"
+                     + ("\n\n<i>Yordam so‘radi: shu xabarga “Reply” qilib javob yozing.</i>" if val in ("help", "hard") else ""))
+
+
+async def send_reminder(bot: Bot, row, data: dict) -> str | None:
+    """Kerak bo‘lsa eslatma yuboradi va eslatma turini qaytaradi."""
+    import json
+    lang = data.get("lang", "uz")
+    name = html.escape(row["first_name"] or "")
+    sid = row["id"]
+    st = row["stage"]
+    if row["finished_at"] is None:
+        pos = row["pos"] or 0
+        done = max(0, pos - 3)
+        if done == 0:
+            text = E["rem_start"][lang].format(name=name)
+        else:
+            text = E["rem_free"][lang].format(name=name, done=done, left=max(1, 30 - done))
+        markup = kb([[(E["btn_continue"][lang], f"yes:{sid}")]], "resume")
+        key = "free"
+    elif st in ("rating", "wrong", "offer"):
+        res = json.loads(row["result"]) if row["result"] else {}
+        top = res.get("top") or []
+        tip = PAIRS[pair_key(*top)][0 if lang == "uz" else 1] if res.get("kind") == "normal" and len(top) == 2 else "—"
+        text = E["rem_offer"][lang].format(name=name, tip=html.escape(tip))
+        markup = kb([[(E["btn_offer"][lang], "offer")]], f"rem:{sid}")
+        key = "offer"
+    elif st == "paid_q":
+        text = E["rem_paid_q"][lang].format(name=name, left=max(1, 14 - (row["pos"] or 0)))
+        markup = kb([[(E["btn_continue"][lang], "cont")]], f"rem:{sid}")
+        key = "paid_q"
+    elif st in ("dream", "doubt"):
+        text = E["rem_open"][lang].format(name=name)
+        markup = kb([[(E["btn_continue"][lang], "cont")]], f"rem:{sid}")
+        key = "open"
+    elif st == "done" and data.get("phase") == "paid" and data.get("pay") is None:
+        text = E["rem_pay"][lang].format(name=name)
+        markup = kb([[(E["btn_pay"][lang], "pay")]], f"rem:{sid}")
+        key = "pay"
+    else:
+        return None
+    if data.get("rem") == key:
+        return None
+    await bot.send_message(row["user_id"], text, reply_markup=markup)
+    return key
+
+
+async def engage_once(bot: Bot):
+    if not engage.can_send_now():
+        return
+    now = engage.now()
+    for row in db.latest_per_user():
+        data = db.data_of(row)
+        if data.get("blocked"):
+            continue
+        lang = data.get("lang", "uz")
+        try:
+            # 1) Hisobot olganlarga reja bo‘yicha so‘rov (3, 7, 14-kun)
+            if data.get("report_sent"):
+                days = (now - data["report_sent"]) / 86400
+                sent = data.get("fu", [])
+                due = [i for i, d in enumerate(engage.FOLLOWUP_DAYS) if days >= d and i not in sent]
+                if due:
+                    i = due[-1]
+                    name = html.escape(row["first_name"] or "")
+                    btns = [[(t, v)] for t, v in E["fu_btn"][i][lang]]
+                    await bot.send_message(row["user_id"], E[f"fu{i}"][lang].format(name=name),
+                                           reply_markup=kb(btns, f"fu:{row['id']}:{i}"))
+                    data["fu"] = sorted(set(sent) | set(range(i + 1)))
+                    db.save(row["id"], touch=False, data=data)
+                continue
+            # 2) Admin: tasdiqlanmagan chek 6 soatdan oshsa, bir marta eslatish
+            if data.get("pay") == "pending" and not data.get("pay_nag") and now - engage.last_active(row) > 6 * 3600:
+                await admin_note(bot, f"⏰ Chek tasdiqlanishini kutyapti: sessiya #{row['id']} "
+                                      f"({html.escape(row['first_name'] or '')}). Yuqoridagi ✅/❌ tugmasini bosing.")
+                data["pay_nag"] = 1
+                db.save(row["id"], touch=False, data=data)
+                continue
+            # 3) 3 kun faolsiz qolganlarga, to‘xtagan joyiga qarab eslatma
+            if now - engage.last_active(row) < engage.REMIND_DAYS * 86400:
+                continue
+            key = await send_reminder(bot, row, data)
+            if key:
+                data["rem"] = key
+                db.save(row["id"], touch=False, data=data)
+        except TelegramForbiddenError:
+            data["blocked"] = 1
+            db.save(row["id"], touch=False, data=data)
+        except Exception as e:
+            logging.warning("engage xatosi (sessiya %s): %s", row["id"], e)
+        await asyncio.sleep(0.1)
+
+
+async def engage_loop(bot: Bot):
+    await asyncio.sleep(120)
+    while True:
+        try:
+            await engage_once(bot)
+        except Exception as e:
+            logging.warning("engage_loop: %s", e)
+        await asyncio.sleep(30 * 60)
+
+
+_engage_started = False
+
+
+@dp.startup()
+async def on_startup(bot: Bot):
+    global _engage_started
+    if not _engage_started:
+        _engage_started = True
+        asyncio.create_task(engage_loop(bot))
+
+
+# ---------------- Voronka: kim qayerda to‘xtadi ----------------
+
+@dp.message(Command("funnel"))
+async def on_funnel(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    rows = db.latest_per_user()
+    counts = {}
+    for r in rows:
+        k = engage.step_key(r, db.data_of(r))
+        counts[k] = counts.get(k, 0) + 1
+    total = len(rows) or 1
+    lines = [f"📉 <b>Kim qayerda to‘xtagan</b> (har bir foydalanuvchining oxirgi urinishi, jami {len(rows)})\n"]
+    for k in engage.FUNNEL_ORDER:
+        if counts.get(k):
+            lines.append(f"{engage.step_label(k)} — <b>{counts[k]}</b> ({100 * counts[k] / total:.0f}%)")
+    stuck = sorted(((v, k) for k, v in counts.items() if k != "closed"), reverse=True)[:3]
+    if stuck:
+        lines.append("\n🔎 Eng ko‘p to‘xtagan joylar: " + "; ".join(f"{engage.step_label(k)} ({v})" for v, k in stuck))
+    lines.append("\nBatafsil ro‘yxat: /users")
+    await message.answer("\n".join(lines))
+
+
+@dp.message(Command("users"))
+async def on_users(message: Message, command: CommandObject):
+    if not is_admin(message.from_user.id):
+        return
+    n = int(command.args) if command.args and command.args.strip().isdigit() else 20
+    rows = sorted(db.latest_per_user(), key=engage.last_active, reverse=True)[:min(n, 50)]
+    lines = [f"👥 <b>Oxirgi {len(rows)} foydalanuvchi</b>\n"]
+    for r in rows:
+        who = f"@{r['username']}" if r["username"] else f"id {r['user_id']}"
+        lines.append(f"#{r['id']} {html.escape(r['first_name'] or '')} ({who}) — "
+                     f"{engage.step_label(engage.step_key(r, db.data_of(r)))} · {engage.ago(engage.last_active(r))}")
+    await message.answer("\n".join(lines))
 
 
 async def main():

@@ -88,7 +88,7 @@ def free_result(name: str, answers: list[int], lang: str) -> tuple[str, dict]:
                          "Sizga bitta kasb nomini majburan aytmaymiz — avval bir nechta sohani qisqa tanishuv orqali ko‘rib chiqish foydali.")
         else:
             lines.append(f"{name}, большинство занятий из теста вам пока не очень понравились.\n")
-            lines.append("Это нормально: интерес часто появляется после того, как что-то попробуешь на практике. "
+            lines.append("Это нормально: интерес часто появляется после того, как вы что-то попробуете на практике. "
                          "Мы не будем навязывать профессию — сначала полезно коротко познакомиться с несколькими сферами.")
         title_pair = None
     elif p["kind"] == "flat":
