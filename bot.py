@@ -21,6 +21,7 @@ from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButto
 
 import db
 import flow
+import report
 import scoring
 from questions import (DIFFICULTY, FIELD, FORMAT, SUBJECTS, VALUES, FILTER, INTEREST, LICENSE_NOTICE, OPEN_DOUBT, OPEN_DREAM, PAIRS, TIPI, WRONG_PART,
                        pair_key)
@@ -61,19 +62,21 @@ T = {
              "ru": "Насколько точно результат вас описал?\n1 — совсем неверно, 5 — очень точно"},
     "offer": {
         "uz": ("📘 <b>To‘liq hisobot</b>\n\n"
-               "✓ Sizga mos 3–5 ta yo‘nalish va nega aynan ular\n"
+               "✓ Sizga mos 6 ta yo‘nalish va nega aynan ular\n"
+               "✓ Fanlaringiz shu yo‘nalishlarga mosmi\n"
                "✓ Siz uchun qulay ish muhiti\n"
-               "✓ O‘zbekistondagi OTM yo‘nalishlari va imtihon fanlari\n"
                "✓ Kasb tanlashdagi ikkilanishingizga alohida javob\n"
+               "✓ Javoblaringiz asosida shaxsiy AI-izoh\n"
                "✓ 2 haftalik sinov rejasi\n"
                "✓ Ota-onangiz uchun alohida sahifa\n\n"
                "Hisobot aniq chiqishi uchun yana 16 ta qisqa savolga javob berasiz (~3 daqiqa). "
                "To‘lov tasdiqlangach, hisobot shu chatga yuboriladi.{price}"),
         "ru": ("📘 <b>Полный отчёт</b>\n\n"
-               "✓ 3–5 подходящих направлений и почему именно они\n"
+               "✓ 6 подходящих направлений и почему именно они\n"
+               "✓ Подходят ли ваши предметы к этим направлениям\n"
                "✓ Комфортная для вас рабочая среда\n"
-               "✓ Направления вузов Узбекистана и вступительные предметы\n"
                "✓ Отдельный ответ на ваши сомнения в выборе профессии\n"
+               "✓ Персональный AI-комментарий по вашим ответам\n"
                "✓ План проб на 2 недели\n"
                "✓ Отдельная страница для родителей\n\n"
                "Для точного отчёта ответьте ещё на 16 коротких вопросов (~3 минуты). "
@@ -116,6 +119,17 @@ T = {
                      "Savol bo‘lsa, shu chatga yozing.",
                "ru": "К сожалению, оплата не найдена ❌\n\nПроверьте сумму и номер карты и отправьте чек ещё раз. "
                      "Если есть вопросы — напишите в этот чат."},
+    "answers_saved": {"uz": "Rahmat! Javoblaringiz saqlandi ✅\n\nTo‘lov tasdiqlangach, hisobotingiz shu yerga keladi.",
+                      "ru": "Спасибо! Ответы сохранены ✅\n\nПосле подтверждения оплаты отчёт придёт сюда."},
+    "report_wait": {"uz": "⏳ Hisobotingiz tayyorlanmoqda...", "ru": "⏳ Готовим ваш отчёт..."},
+    "report_rate": {"uz": "Hisobot sizga qanchalik to‘g‘ri va foydali bo‘ldi?\n1 — umuman yo‘q, 5 — juda foydali",
+                    "ru": "Насколько отчёт оказался точным и полезным?\n1 — совсем нет, 5 — очень полезен"},
+    "report_fb_ask": {"uz": "Rahmat! Hisobotda nima noto‘g‘ri yoki yetishmayotgan bo‘lsa, shu yerga yozing. "
+                            "Fikringiz testni yaxshilashga yordam beradi (ixtiyoriy).",
+                      "ru": "Спасибо! Если в отчёте что-то неточно или чего-то не хватает, напишите сюда. "
+                            "Ваше мнение поможет улучшить тест (необязательно)."},
+    "report_fb_thanks": {"uz": "Fikringiz uchun katta rahmat! 🙏\n\nTestni qayta topshirish: /start",
+                         "ru": "Большое спасибо за отзыв! 🙏\n\nПройти тест заново: /start"},
     "retest": {"uz": "Salom! 2 hafta oldin Testry testini topshirgandingiz. Qiziqishlaringiz o‘zgarganmi? "
                      "Testni qayta topshirib ko‘ring — bu bizga testni yaxshilashga yordam beradi: /start",
                "ru": "Привет! 2 недели назад вы прошли тест Testry. Изменились ли ваши интересы? "
@@ -372,8 +386,11 @@ async def save_open(msg: Message, sid: int, text: str | None, bot: Bot):
     elif row["stage"] == "doubt":
         data["open_doubt"] = text
         db.save(sid, data=data, stage="done")
-        await msg.answer(T["thanks_end"][lang])
-        await notify_admins(bot, sid, "📝 To‘liq ma’lumot (hisobot tayyorlash uchun)")
+        if data.get("pay") == "ok":
+            await deliver_report(bot, sid)
+        else:
+            await msg.answer(T["answers_saved"][lang])
+            await notify_admins(bot, sid, "📝 16 ta savolga javob berdi (to‘lov hali tasdiqlanmagan)")
 
 
 @dp.message(Command("about"))
@@ -440,7 +457,7 @@ async def on_export(message: Message):
             [f"tipi{i + 1}_{TIPI[i][0]}{'_R' if TIPI[i][1] else ''}" for i in range(10)] +
             ["subjects", "field", "values", "format", "difficulty", "guess", "R", "I", "A", "S", "E", "C",
              "profile", "top", "guess_match", "ext", "agr", "con", "emo", "opn", "rating", "wrong",
-             "paid_click", "receipt", "open_dream", "open_doubt"])
+             "paid_click", "receipt", "open_dream", "open_doubt", "pay", "report_rating", "report_feedback"])
     w.writerow(head)
     import json
     for r in db.all_rows():
@@ -458,7 +475,8 @@ async def on_export(message: Message):
                    [res.get("kind"), "".join(res.get("top", [])), res.get("guess_match")] +
                    [round(tp[k], 1) if k in tp else None for k in ("ext", "agr", "con", "emo", "opn")] +
                    [r["rating"], ";".join(d.get("wrong", [])), r["paid_click"], r["receipt"],
-                    d.get("open_dream"), d.get("open_doubt")])
+                    d.get("open_dream"), d.get("open_doubt"), d.get("pay"), d.get("report_rating"),
+                    d.get("report_feedback")])
     data = buf.getvalue().encode("utf-8-sig")
     await message.answer_document(BufferedInputFile(data, filename=f"testry_{time.strftime('%Y%m%d_%H%M')}.csv"))
 
@@ -564,7 +582,7 @@ async def on_pay_decision(cb: CallbackQuery):
         pass
     if val == "ok":
         await cb.bot.send_message(row["user_id"], T["pay_ok"][lang])
-        if row["stage"] == "paid_q":
+        if row["stage"] in ("paid_q", "dream", "doubt"):
             await cb.bot.send_message(row["user_id"], T["pay_ok_wait_q"][lang])
         await on_paid_confirmed(cb.bot, sid)
     else:
@@ -572,8 +590,100 @@ async def on_pay_decision(cb: CallbackQuery):
 
 
 async def on_paid_confirmed(bot: Bot, sid: int):
-    """To‘lov tasdiqlanganda chaqiriladi. Avtomatik hisobot generatori tayyor bo‘lgach, shu yerda yuboriladi."""
-    await notify_admins(bot, sid, "💵 To‘lov tasdiqlandi — hisobot yuborilishi kerak")
+    """To‘lov tasdiqlanganda chaqiriladi: savollar tugagan bo‘lsa, hisobot darhol yuboriladi."""
+    row = db.get(sid)
+    if row["stage"] == "done":
+        await deliver_report(bot, sid)
+
+
+async def deliver_report(bot: Bot, sid: int, to: int | None = None) -> bool:
+    """Hisobotni tuzib yuboradi. to berilsa (admin ko‘rish uchun), faqat o‘sha odamga yuboradi."""
+    import json
+    row = db.get(sid)
+    data = db.data_of(row)
+    lang = data.get("lang", "uz")
+    if to is None and (data.get("report_sent") or data.get("pay") != "ok" or row["stage"] != "done"):
+        return False
+    res = json.loads(row["result"]) if row["result"] else {}
+    if not res.get("scores"):
+        return False
+    chat = to or row["user_id"]
+    await bot.send_message(chat, T["report_wait"][lang])
+    parts = await report.build(row["first_name"] or "", data, res, lang)
+    for p in parts:
+        await bot.send_message(chat, p)
+        await asyncio.sleep(0.3)
+    if to is not None:
+        return True
+    data["report_sent"] = int(time.time())
+    db.save(sid, data=data, stage="report_rate")
+    await bot.send_message(chat, T["report_rate"][lang],
+                           reply_markup=kb([[(str(i), str(i)) for i in range(1, 6)]], f"rf:{sid}"))
+    for aid in ADMIN_IDS:
+        try:
+            await bot.send_message(aid, f"📘 Hisobot yuborildi: sessiya #{sid} ({html.escape(row['first_name'] or '')})")
+        except Exception:
+            pass
+    return True
+
+
+@dp.callback_query(F.data.startswith("rf:"))
+async def on_report_rate(cb: CallbackQuery):
+    _, sid, val = cb.data.split(":")
+    sid = int(sid)
+    row = db.get(sid)
+    if not row or row["user_id"] != cb.from_user.id or row["stage"] != "report_rate":
+        await cb.answer()
+        return
+    data = db.data_of(row)
+    lang = data.get("lang", "uz")
+    data["report_rating"] = int(val)
+    db.save(sid, data=data, stage="report_fb")
+    await cb.answer()
+    await cb.message.edit_text(f"{T['report_rate'][lang]}\n\n✅ {val}")
+    await cb.message.answer(T["report_fb_ask"][lang], reply_markup=kb([[(T["skip"][lang], "skip")]], f"rfs:{sid}"))
+
+
+@dp.callback_query(F.data.startswith("rfs:"))
+async def on_report_fb_skip(cb: CallbackQuery):
+    _, sid, _v = cb.data.split(":")
+    await cb.answer()
+    await cb.message.edit_reply_markup(reply_markup=None)
+    await save_report_feedback(cb.bot, int(sid), None, cb.from_user.id)
+
+
+async def save_report_feedback(bot: Bot, sid: int, text: str | None, uid: int):
+    row = db.get(sid)
+    if not row or row["user_id"] != uid or row["stage"] != "report_fb":
+        return
+    data = db.data_of(row)
+    lang = data.get("lang", "uz")
+    data["report_feedback"] = text
+    db.save(sid, data=data, stage="closed")
+    await bot.send_message(uid, T["report_fb_thanks"][lang])
+    who = f"@{row['username']}" if row["username"] else f"id {row['user_id']}"
+    for aid in ADMIN_IDS:
+        try:
+            await bot.send_message(aid, f"⭐ Hisobotga baho: {data.get('report_rating')} · sessiya #{sid} ({who})\n"
+                                        f"Fikr: {html.escape(text or '—')}")
+        except Exception:
+            pass
+
+
+@dp.message(Command("report"))
+async def on_report_preview(message: Message, command: CommandObject):
+    """Admin uchun: /report 12 — 12-sessiya hisobotini o‘zingizga ko‘rish uchun yuboradi."""
+    if not is_admin(message.from_user.id):
+        return
+    if not command.args or not command.args.strip().isdigit():
+        await message.answer("Foydalanish: /report sessiya_raqami (masalan, /report 3)")
+        return
+    sid = int(command.args.strip())
+    row = db.get(sid)
+    if not row or not row["result"]:
+        await message.answer("Bu sessiyada natija yo‘q")
+        return
+    await deliver_report(message.bot, sid, to=message.from_user.id)
 
 
 @dp.message(F.text & ~F.text.startswith("/"))
@@ -581,6 +691,9 @@ async def on_text(message: Message):
     last = db.latest(message.from_user.id)
     if last and last["stage"] in ("dream", "doubt"):
         await save_open(message, last["id"], message.text[:2000], message.bot)
+        return
+    if last and last["stage"] == "report_fb":
+        await save_report_feedback(message.bot, last["id"], message.text[:2000], message.from_user.id)
         return
     # boshqa matnlar: fikr-mulohaza sifatida adminlarga
     for aid in ADMIN_IDS:
