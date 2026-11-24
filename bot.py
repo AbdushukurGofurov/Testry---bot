@@ -16,8 +16,8 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup,
-                           Message)
+from aiogram.types import (BotCommand, BotCommandScopeChat, BotCommandScopeDefault, BufferedInputFile, CallbackQuery,
+                           InlineKeyboardButton, InlineKeyboardMarkup, Message)
 
 import db
 import engage
@@ -782,11 +782,14 @@ async def save_report_feedback(bot: Bot, sid: int, text: str | None, uid: int):
 
 @dp.message(Command("report"))
 async def on_report_preview(message: Message, command: CommandObject):
-    """Admin uchun: /report 12 — 12-sessiya hisobotini o‘zingizga ko‘rish uchun yuboradi."""
-    if not is_admin(message.from_user.id):
-        return
-    if not command.args or not command.args.strip().isdigit():
-        await message.answer("Foydalanish: /report sessiya_raqami (masalan, /report 3)")
+    """Foydalanuvchi: o‘z hisobotini qayta oladi. Admin: /report 12 — 12-sessiya hisobotini ko‘radi."""
+    if not (is_admin(message.from_user.id) and command.args and command.args.strip().isdigit()):
+        prev = db.last_finished(message.from_user.id)
+        lang = user_lang(message.from_user.id)
+        if prev and db.data_of(prev).get("report_sent"):
+            await deliver_report(message.bot, prev["id"], to=message.from_user.id)
+        else:
+            await message.answer(MENU_T["no_report"][lang])
         return
     sid = int(command.args.strip())
     row = db.get(sid)
@@ -1080,6 +1083,90 @@ async def on_startup(bot: Bot):
     if not _engage_started:
         _engage_started = True
         asyncio.create_task(engage_loop(bot))
+        asyncio.create_task(setup_menu(bot))
+
+
+# ---------------- Menyu (chap pastdagi "Menu" tugmasi) ----------------
+
+USER_COMMANDS = {
+    "uz": [("start", "🚀 Testni boshlash"), ("result", "📊 Mening natijam"), ("report", "📘 To‘liq hisobotim"),
+           ("language", "🌐 Tilni o‘zgartirish"), ("help", "💬 Yordam va savollar"), ("about", "ℹ️ Test haqida")],
+    "ru": [("start", "🚀 Начать тест"), ("result", "📊 Мой результат"), ("report", "📘 Мой полный отчёт"),
+           ("language", "🌐 Сменить язык"), ("help", "💬 Помощь и вопросы"), ("about", "ℹ️ О тесте")],
+}
+ADMIN_COMMANDS = [("stats", "📊 Statistika"), ("funnel", "📉 Kim qayerda to‘xtadi"), ("users", "👥 Oxirgi foydalanuvchilar"),
+                  ("export", "📁 Barcha javoblar (fayl)"), ("retest", "🔁 Qayta test taklifi")]
+
+MENU_T = {
+    "no_result": {"uz": "Siz hali testni yechmagansiz 🙂 Boshlash uchun: /start",
+                  "ru": "Вы ещё не проходили тест 🙂 Начать: /start"},
+    "no_report": {"uz": "Sizda hali to‘liq hisobot yo‘q 🙂 Testni yechib, natijadan keyin “To‘liq hisobotni olish” tugmasini bosing: /start",
+                  "ru": "У вас пока нет полного отчёта 🙂 Пройдите тест и после результата нажмите «Получить полный отчёт»: /start"},
+    "lang_ask": {"uz": "Tilni tanlang:", "ru": "Выберите язык:"},
+    "lang_ok": {"uz": "Til o‘zgartirildi ✅", "ru": "Язык изменён ✅"},
+    "help": {"uz": "💬 <b>Yordam</b>\n\nSavolingiz yoki fikringizni shu chatga oddiy xabar qilib yozing. "
+                   "Jamoamiz albatta o‘qiydi va shu yerda javob beradi. 😊\n\n"
+                   "<b>Buyruqlar:</b>\n/start — testni boshlash\n/result — mening natijam\n"
+                   "/report — to‘liq hisobotim\n/language — tilni o‘zgartirish\n/about — test haqida",
+             "ru": "💬 <b>Помощь</b>\n\nНапишите свой вопрос или отзыв обычным сообщением в этот чат. "
+                   "Наша команда обязательно прочитает и ответит здесь. 😊\n\n"
+                   "<b>Команды:</b>\n/start — начать тест\n/result — мой результат\n"
+                   "/report — мой полный отчёт\n/language — сменить язык\n/about — о тесте"},
+}
+
+
+def user_lang(uid: int) -> str:
+    last = db.latest(uid)
+    return lang_of(last) if last else "uz"
+
+
+async def setup_menu(bot: Bot):
+    """Telegram'dagi “Menu” tugmasi uchun buyruqlar ro‘yxati: o‘zbekcha (asosiy), ruscha, adminlar uchun alohida."""
+    try:
+        for lang_code, lang in ((None, "uz"), ("ru", "ru")):
+            await bot.set_my_commands([BotCommand(command=c, description=d) for c, d in USER_COMMANDS[lang]],
+                                      scope=BotCommandScopeDefault(), language_code=lang_code)
+        for aid in ADMIN_IDS:
+            cmds = USER_COMMANDS["uz"] + ADMIN_COMMANDS
+            await bot.set_my_commands([BotCommand(command=c, description=d) for c, d in cmds],
+                                      scope=BotCommandScopeChat(chat_id=aid))
+        logging.info("menyu buyruqlari o‘rnatildi")
+    except Exception as e:
+        logging.warning("menyu o‘rnatilmadi: %s", e)
+
+
+@dp.message(Command("result"))
+async def on_result_cmd(message: Message):
+    prev = db.last_finished(message.from_user.id)
+    if not prev or not prev["result"]:
+        await message.answer(MENU_T["no_result"][user_lang(message.from_user.id)])
+        return
+    d = db.data_of(prev)
+    text, _meta = scoring.free_result(html.escape(message.from_user.first_name or ""), d["interest"], d.get("lang", "uz"))
+    await message.answer(text)
+
+
+@dp.message(Command("help"))
+async def on_help_cmd(message: Message):
+    await message.answer(MENU_T["help"][user_lang(message.from_user.id)])
+
+
+@dp.message(Command("language"))
+async def on_language_cmd(message: Message):
+    lang = user_lang(message.from_user.id)
+    await message.answer(MENU_T["lang_ask"][lang], reply_markup=kb([[("🇺🇿 O‘zbekcha", "uz"), ("🇷🇺 Русский", "ru")]], "setlang"))
+
+
+@dp.callback_query(F.data.startswith("setlang:"))
+async def on_setlang(cb: CallbackQuery):
+    lang = cb.data.split(":")[1]
+    await cb.answer()
+    for row in (db.latest(cb.from_user.id), db.last_finished(cb.from_user.id)):
+        if row:
+            d = db.data_of(row)
+            d["lang"] = lang
+            db.save(row["id"], touch=False, data=d)
+    await cb.message.edit_text(MENU_T["lang_ok"][lang])
 
 
 # ---------------- Voronka: kim qayerda to‘xtadi ----------------
