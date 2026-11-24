@@ -72,7 +72,7 @@ T = {
                "✓ 2 haftalik sinov rejasi\n"
                "✓ Ota-onangiz uchun alohida sahifa\n\n"
                "Hisobot aniq chiqishi uchun yana 16 ta qisqa savolga javob berasiz (~3 daqiqa). "
-               "To‘lov tasdiqlangach, hisobot shu chatga yuboriladi.{price}"),
+               "To‘lov tasdiqlanishi bilan hisobot darhol shu chatga yuboriladi.{price}"),
         "ru": ("📘 <b>Полный отчёт</b>\n\n"
                "✓ 6 подходящих направлений и почему именно они\n"
                "✓ Подходят ли ваши предметы к этим направлениям\n"
@@ -82,24 +82,23 @@ T = {
                "✓ План проб на 2 недели\n"
                "✓ Отдельная страница для родителей\n\n"
                "Для точного отчёта ответьте ещё на 16 коротких вопросов (~3 минуты). "
-               "После подтверждения оплаты отчёт придёт в этот чат.{price}"),
+               "Сразу после подтверждения оплаты отчёт придёт в этот чат.{price}"),
     },
     "price": {"uz": "\n\n💳 Narxi: <b>{}</b>", "ru": "\n\n💳 Стоимость: <b>{}</b>"},
     "buy": {"uz": "📘 To‘liq hisobotni olish", "ru": "📘 Получить полный отчёт"},
     "no_thanks": {"uz": "Hozircha kerak emas", "ru": "Пока не нужно"},
     "pay_info": {
-        "uz": "Rahmat! 🙌\n\n{pay}To‘lovdan keyin chekning rasmini (skrinshotini) shu chatga yuboring. "
-              "To‘lov tasdiqlangach, hisobot shu yerga keladi.",
-        "ru": "Спасибо! 🙌\n\n{pay}После оплаты отправьте фото (скриншот) чека в этот чат. "
-              "После подтверждения оплаты отчёт придёт сюда.",
+        "uz": "Rahmat! 🙌\n\n{pay}👉 To‘lov qiling va chek rasmini (skrinshotini) shu chatga yuboring. "
+              "To‘lov tasdiqlanishi bilan hisobotingiz <b>darhol</b> shu yerga yuboriladi.",
+        "ru": "Спасибо! 🙌\n\n{pay}👉 Оплатите и отправьте фото (скриншот) чека в этот чат. "
+              "Сразу после подтверждения оплаты отчёт <b>моментально</b> придёт сюда.",
     },
     "pay_link": {"uz": "To‘lov havolasi: {}\n\n", "ru": "Ссылка на оплату: {}\n\n"},
     "pay_card": {"uz": "💳 To‘lov: <b>{price}</b>\nKarta raqami: <code>{card}</code>\nKarta egasi: {holder}\n"
                        "<i>(raqamni bossangiz, nusxalanadi)</i>\n\n",
                  "ru": "💳 Оплата: <b>{price}</b>\nНомер карты: <code>{card}</code>\nВладелец: {holder}\n"
                        "<i>(нажмите на номер, чтобы скопировать)</i>\n\n"},
-    "pay_manual": {"uz": "Tez orada administratorimiz siz bilan bog‘lanib, to‘lov tafsilotlarini yuboradi.\n\n",
-                   "ru": "Скоро наш администратор свяжется с вами и отправит детали оплаты.\n\n"},
+    "pay_manual": {"uz": "💳 To‘lov: <b>{price}</b>\n\n", "ru": "💳 Оплата: <b>{price}</b>\n\n"},
     "paid_intro": {"uz": "Endi hisobotingizni shaxsiylashtiramiz: 14 ta tugmali savol va 2 ta ochiq savol (~3 daqiqa). 👇",
                    "ru": "Теперь сделаем отчёт персональным: 14 вопросов с кнопками и 2 открытых (~3 минуты). 👇"},
     "open_intro": {"uz": "Deyarli tayyor! Oxirgi 2 ta savol (ixtiyoriy, lekin hisobotni ancha aniq qiladi):",
@@ -109,10 +108,8 @@ T = {
                    "ru": "Спасибо! Ваши ответы сохранены. ✅\n\nПройти тест заново: /start"},
     "declined": {"uz": "Tushunarli! Testni qayta topshirish: /start\nNatijangiz haqida fikringiz bo‘lsa, shu yerga yozing.",
                  "ru": "Понятно! Пройти тест заново: /start\nЕсли есть мысли о результате — напишите сюда."},
-    "receipt_ok": {"uz": "Chek qabul qilindi ✅ To‘lovni tekshiryapmiz, odatda bu bir necha soat ichida bo‘ladi. "
-                         "Tasdiqlangach, shu yerga xabar keladi.",
-                   "ru": "Чек получен ✅ Проверяем оплату, обычно это занимает несколько часов. "
-                         "После подтверждения вы получите сообщение здесь."},
+    "receipt_ok": {"uz": "Chek qabul qilindi ✅ To‘lov tasdiqlanishi bilan hisobotingiz darhol shu yerga yuboriladi.",
+                   "ru": "Чек получен ✅ Сразу после подтверждения оплаты отчёт придёт сюда."},
     "pay_ok": {"uz": "To‘lovingiz tasdiqlandi ✅ Rahmat!",
                "ru": "Оплата подтверждена ✅ Спасибо!"},
     "pay_ok_wait_q": {"uz": "Hisobot tayyor bo‘lishi uchun qo‘shimcha savollarni oxirigacha yakunlang. 👆",
@@ -753,7 +750,8 @@ def pay_text(lang: str) -> str:
         card = " ".join(digits[i:i + 4] for i in range(0, len(digits), 4))
         return T["pay_card"][lang].format(price=html.escape(PRICE_TEXT or "—"), card=card,
                                           holder=html.escape(CARD_HOLDER or "—"))
-    return T["pay_manual"][lang]
+    logging.warning("CARD_NUMBER o‘rnatilmagan: to‘lov uchun karta raqami ko‘rsatilmadi")
+    return T["pay_manual"][lang].format(price=html.escape(PRICE_TEXT or "—"))
 
 
 # ---------------- Ota-onaga ulashish ----------------
