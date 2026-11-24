@@ -1,8 +1,10 @@
-"""Botni bepul Render web-xizmatida ishga tushirish (webhook rejimi).
+"""Botni bepul Render web-xizmatida ishga tushirish.
 
-- Render PORT va RENDER_EXTERNAL_URL beradi: bot shu manzilda Telegram xabarlarini qabul qiladi.
+- Avval port ochiladi (Render shuni kutadi), keyin Telegram ulanishi sozlanadi.
+- Webhook: Telegram xabarlarni shu manzilga yuboradi va uxlab qolgan xizmatni uyg'otadi.
+- Webhook o'rnatilmasa (Telegram xatosi), bot polling rejimida ishlayveradi.
 - Bepul xizmat 15 daqiqa so'rovsiz qolsa uxlaydi, shuning uchun bot har 10 daqiqada o'z manzilini tekshirib turadi.
-- Bu o'zgaruvchilar bo'lmasa (masalan, kompyuterda sinash), oddiy polling rejimida ishlaydi.
+- PORT bo'lmasa (masalan, kompyuterda sinash), oddiy polling rejimida ishlaydi.
 """
 import asyncio
 import hashlib
@@ -14,7 +16,7 @@ from aiohttp import web
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 
 import db
 from bot import BOT_TOKEN, dp
@@ -42,6 +44,20 @@ async def keep_awake(base: str):
             await asyncio.sleep(PING_EVERY)
 
 
+async def try_set_webhook(bot: Bot, url: str, secret: str, attempts: int = 6) -> bool:
+    delay = 5
+    for i in range(1, attempts + 1):
+        try:
+            await bot.set_webhook(url, secret_token=secret, drop_pending_updates=False)
+            logging.info("webhook o‘rnatildi")
+            return True
+        except Exception as e:
+            logging.warning("webhook o‘rnatilmadi (%s/%s): %s", i, attempts, e)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 60)
+    return False
+
+
 async def main():
     if not BOT_TOKEN:
         raise SystemExit("BOT_TOKEN o‘rnatilmagan")
@@ -55,25 +71,29 @@ async def main():
 
     app = web.Application()
     app.router.add_get("/", health)
+    secret = hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:32]
+    path = f"/tg/{secret[:16]}"
+    SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=secret).register(app, path=path)
+
+    # 1) Avval portni ochamiz, shunda Render xizmatni "ishlayapti" deb biladi
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "0.0.0.0", PORT).start()
+    logging.info("port %s ochildi", PORT)
 
     if BASE_URL:
-        secret = hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:32]
-        path = f"/tg/{secret[:16]}"
-        SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=secret).register(app, path=path)
-        setup_application(app, dp, bot=bot)
-        await bot.set_webhook(BASE_URL + path, secret_token=secret, drop_pending_updates=False)
-        logging.info("webhook o‘rnatildi")
         asyncio.create_task(keep_awake(BASE_URL))
-        runner = web.AppRunner(app)
-        await runner.setup()
-        await web.TCPSite(runner, "0.0.0.0", PORT).start()
+
+    # 2) Telegram ulanishi: webhook, bo'lmasa polling
+    if BASE_URL and await try_set_webhook(bot, BASE_URL + path, secret):
+        await dp.emit_startup(bot=bot)
         await asyncio.Event().wait()
     else:
-        # Manzil noma'lum: sog'liq tekshiruvi uchun port ochamiz va polling qilamiz
-        runner = web.AppRunner(app)
-        await runner.setup()
-        await web.TCPSite(runner, "0.0.0.0", PORT).start()
-        await bot.delete_webhook(drop_pending_updates=False)
+        logging.warning("polling rejimiga o‘tildi")
+        try:
+            await bot.delete_webhook(drop_pending_updates=False)
+        except Exception as e:
+            logging.warning("delete_webhook xatosi: %s", e)
         await dp.start_polling(bot)
 
 
