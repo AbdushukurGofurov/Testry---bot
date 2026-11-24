@@ -31,6 +31,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x}
 PRICE_TEXT = os.getenv("PRICE_TEXT", "")          # masalan: "49 000 so‘m"
 PAYMENT_URL = os.getenv("PAYMENT_URL", "")        # Payme/Click havolasi (ixtiyoriy)
+CARD_NUMBER = os.getenv("CARD_NUMBER", "").strip()  # to‘lov qabul qilinadigan karta (Render Environment’da)
+CARD_HOLDER = os.getenv("CARD_HOLDER", "").strip()  # karta egasining ismi
 
 dp = Dispatcher()
 
@@ -66,7 +68,7 @@ T = {
                "✓ 2 haftalik sinov rejasi\n"
                "✓ Ota-onangiz uchun alohida sahifa\n\n"
                "Hisobot aniq chiqishi uchun yana 16 ta qisqa savolga javob berasiz (~3 daqiqa). "
-               "Hisobotni mutaxassisimiz 24 soat ichida tayyorlaydi.{price}"),
+               "To‘lov tasdiqlangach, hisobot shu chatga yuboriladi.{price}"),
         "ru": ("📘 <b>Полный отчёт</b>\n\n"
                "✓ 3–5 подходящих направлений и почему именно они\n"
                "✓ Комфортная для вас рабочая среда\n"
@@ -75,16 +77,22 @@ T = {
                "✓ План проб на 2 недели\n"
                "✓ Отдельная страница для родителей\n\n"
                "Для точного отчёта ответьте ещё на 16 коротких вопросов (~3 минуты). "
-               "Отчёт подготовит наш специалист в течение 24 часов.{price}"),
+               "После подтверждения оплаты отчёт придёт в этот чат.{price}"),
     },
     "price": {"uz": "\n\n💳 Narxi: <b>{}</b>", "ru": "\n\n💳 Стоимость: <b>{}</b>"},
     "buy": {"uz": "📘 To‘liq hisobotni olish", "ru": "📘 Получить полный отчёт"},
     "no_thanks": {"uz": "Hozircha kerak emas", "ru": "Пока не нужно"},
     "pay_info": {
-        "uz": "Rahmat! 🙌\n\n{pay}To‘lovdan keyin chekning rasmini shu chatga yuboring. Hisobot 24 soat ichida tayyor bo‘ladi.",
-        "ru": "Спасибо! 🙌\n\n{pay}После оплаты отправьте фото чека в этот чат. Отчёт будет готов в течение 24 часов.",
+        "uz": "Rahmat! 🙌\n\n{pay}To‘lovdan keyin chekning rasmini (skrinshotini) shu chatga yuboring. "
+              "To‘lov tasdiqlangach, hisobot shu yerga keladi.",
+        "ru": "Спасибо! 🙌\n\n{pay}После оплаты отправьте фото (скриншот) чека в этот чат. "
+              "После подтверждения оплаты отчёт придёт сюда.",
     },
     "pay_link": {"uz": "To‘lov havolasi: {}\n\n", "ru": "Ссылка на оплату: {}\n\n"},
+    "pay_card": {"uz": "💳 To‘lov: <b>{price}</b>\nKarta raqami: <code>{card}</code>\nKarta egasi: {holder}\n"
+                       "<i>(raqamni bossangiz, nusxalanadi)</i>\n\n",
+                 "ru": "💳 Оплата: <b>{price}</b>\nНомер карты: <code>{card}</code>\nВладелец: {holder}\n"
+                       "<i>(нажмите на номер, чтобы скопировать)</i>\n\n"},
     "pay_manual": {"uz": "Tez orada administratorimiz siz bilan bog‘lanib, to‘lov tafsilotlarini yuboradi.\n\n",
                    "ru": "Скоро наш администратор свяжется с вами и отправит детали оплаты.\n\n"},
     "paid_intro": {"uz": "Endi hisobotingizni shaxsiylashtiramiz: 14 ta tugmali savol va 2 ta ochiq savol (~3 daqiqa). 👇",
@@ -96,8 +104,18 @@ T = {
                    "ru": "Спасибо! Ваши ответы сохранены. ✅\n\nПройти тест заново: /start"},
     "declined": {"uz": "Tushunarli! Testni qayta topshirish: /start\nNatijangiz haqida fikringiz bo‘lsa, shu yerga yozing.",
                  "ru": "Понятно! Пройти тест заново: /start\nЕсли есть мысли о результате — напишите сюда."},
-    "receipt_ok": {"uz": "Chek qabul qilindi ✅ Hisobotingiz 24 soat ichida tayyor bo‘ladi.",
-                   "ru": "Чек получен ✅ Отчёт будет готов в течение 24 часов."},
+    "receipt_ok": {"uz": "Chek qabul qilindi ✅ To‘lovni tekshiryapmiz, odatda bu bir necha soat ichida bo‘ladi. "
+                         "Tasdiqlangach, shu yerga xabar keladi.",
+                   "ru": "Чек получен ✅ Проверяем оплату, обычно это занимает несколько часов. "
+                         "После подтверждения вы получите сообщение здесь."},
+    "pay_ok": {"uz": "To‘lovingiz tasdiqlandi ✅ Rahmat!",
+               "ru": "Оплата подтверждена ✅ Спасибо!"},
+    "pay_ok_wait_q": {"uz": "Hisobot tayyor bo‘lishi uchun qo‘shimcha savollarni oxirigacha yakunlang. 👆",
+                      "ru": "Чтобы отчёт был готов, ответьте на дополнительные вопросы до конца. 👆"},
+    "pay_no": {"uz": "Afsuski, to‘lov topilmadi ❌\n\nSumma va karta raqamini tekshirib, chekni qayta yuboring. "
+                     "Savol bo‘lsa, shu chatga yozing.",
+               "ru": "К сожалению, оплата не найдена ❌\n\nПроверьте сумму и номер карты и отправьте чек ещё раз. "
+                     "Если есть вопросы — напишите в этот чат."},
     "retest": {"uz": "Salom! 2 hafta oldin Testry testini topshirgandingiz. Qiziqishlaringiz o‘zgarganmi? "
                      "Testni qayta topshirib ko‘ring — bu bizga testni yaxshilashga yordam beradi: /start",
                "ru": "Привет! 2 недели назад вы прошли тест Testry. Изменились ли ваши интересы? "
@@ -309,7 +327,14 @@ async def on_offer(cb: CallbackQuery):
     data = db.data_of(row)
     data["phase"] = "paid"
     db.save(sid, paid_click=1, stage="paid_q", data=data, pos=0)
-    pay = T["pay_link"][lang].format(PAYMENT_URL) if PAYMENT_URL else T["pay_manual"][lang]
+    if PAYMENT_URL:
+        pay = T["pay_link"][lang].format(PAYMENT_URL)
+    elif CARD_NUMBER:
+        card = " ".join(CARD_NUMBER.replace(" ", "")[i:i + 4] for i in range(0, len(CARD_NUMBER.replace(" ", "")), 4))
+        pay = T["pay_card"][lang].format(price=html.escape(PRICE_TEXT or "—"), card=card,
+                                         holder=html.escape(CARD_HOLDER or "—"))
+    else:
+        pay = T["pay_manual"][lang]
     await cb.message.answer(T["pay_info"][lang].format(pay=pay))
     await notify_admins(cb.bot, sid, "💰 Pullik hisobotni bosdi")
     await cb.message.answer(T["paid_intro"][lang])
@@ -478,7 +503,7 @@ async def notify_admins(bot: Bot, sid: int, title: str):
             f"Fanlar/soha: {labels(SUBJECTS, d.get('subjects', [])) or labels(FIELD, d.get('field'))}\n"
             f"Qadriyat: {labels(VALUES, d.get('values'))}\nFormat: {labels(FORMAT, d.get('format'))}\n"
             f"Qiyinchilik: {labels(DIFFICULTY, d.get('difficulty', []))}\n"
-            f"Baho: {row['rating']} · Noto‘g‘ri: {', '.join(d.get('wrong', [])) or '—'}\n"
+            f"Baho: {row['rating']} · Noto‘g‘ri: {labels(WRONG_PART, d.get('wrong', [])) or '—'}\n"
             f"Orzu: {html.escape(d.get('open_dream') or '—')}\n"
             f"Ikkilanish: {html.escape(d.get('open_doubt') or '—')}")
     for aid in ADMIN_IDS:
@@ -493,14 +518,62 @@ async def on_receipt(message: Message):
     last = db.latest(message.from_user.id)
     if not last or not last["paid_click"]:
         return
-    db.save(last["id"], receipt=1)
+    data = db.data_of(last)
+    if data.get("pay") == "ok":
+        return
+    data["pay"] = "pending"
+    db.save(last["id"], receipt=1, data=data)
+    who = f"@{last['username']}" if last["username"] else f"id {last['user_id']}"
+    buttons = kb([[("✅ Pul tushdi", "ok"), ("❌ Tushmadi", "no")]], f"pay:{last['id']}")
     for aid in ADMIN_IDS:
         try:
-            await message.bot.send_message(aid, f"🧾 Chek: sessiya #{last['id']}")
             await message.forward(aid)
+            await message.bot.send_message(
+                aid, f"🧾 Chek: sessiya #{last['id']} · {html.escape(last['first_name'] or '')} ({who})\n"
+                     f"Kutilgan summa: <b>{html.escape(PRICE_TEXT or '—')}</b>\n\n"
+                     "Karta tarixini tekshirib, tugmani bosing:", reply_markup=buttons)
         except Exception as e:
             logging.warning("forward failed: %s", e)
     await message.answer(T["receipt_ok"][lang_of(last)])
+
+
+@dp.callback_query(F.data.startswith("pay:"))
+async def on_pay_decision(cb: CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        await cb.answer()
+        return
+    _, sid, val = cb.data.split(":")
+    sid = int(sid)
+    row = db.get(sid)
+    if not row:
+        await cb.answer("Sessiya topilmadi", show_alert=True)
+        return
+    data = db.data_of(row)
+    if data.get("pay") == "ok":
+        await cb.answer("Bu to‘lov allaqachon tasdiqlangan", show_alert=True)
+        return
+    lang = data.get("lang", "uz")
+    data["pay"] = "ok" if val == "ok" else "rejected"
+    db.save(sid, data=data)
+    await cb.answer()
+    mark = "✅ Tasdiqlandi" if val == "ok" else "❌ Rad etildi"
+    try:
+        await cb.message.edit_text(cb.message.html_text.split("\n\nKarta tarixini")[0] +
+                                   f"\n\n{mark} ({html.escape(cb.from_user.first_name or '')})")
+    except TelegramBadRequest:
+        pass
+    if val == "ok":
+        await cb.bot.send_message(row["user_id"], T["pay_ok"][lang])
+        if row["stage"] == "paid_q":
+            await cb.bot.send_message(row["user_id"], T["pay_ok_wait_q"][lang])
+        await on_paid_confirmed(cb.bot, sid)
+    else:
+        await cb.bot.send_message(row["user_id"], T["pay_no"][lang])
+
+
+async def on_paid_confirmed(bot: Bot, sid: int):
+    """To‘lov tasdiqlanganda chaqiriladi. Avtomatik hisobot generatori tayyor bo‘lgach, shu yerda yuboriladi."""
+    await notify_admins(bot, sid, "💵 To‘lov tasdiqlandi — hisobot yuborilishi kerak")
 
 
 @dp.message(F.text & ~F.text.startswith("/"))
