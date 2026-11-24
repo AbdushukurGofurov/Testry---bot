@@ -34,8 +34,18 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x}
 PRICE_TEXT = os.getenv("PRICE_TEXT", "")          # masalan: "49 000 so‘m"
 PAYMENT_URL = os.getenv("PAYMENT_URL", "")        # Payme/Click havolasi (ixtiyoriy)
-CARD_NUMBER = os.getenv("CARD_NUMBER", "").strip()  # to‘lov qabul qilinadigan karta (Render Environment’da)
-CARD_HOLDER = os.getenv("CARD_HOLDER", "").strip()  # karta egasining ismi
+
+
+def env_any(name: str) -> str:
+    """Sozlama nomini katta-kichik harfga qaramay topadi (masalan, Card_number ham CARD_NUMBER deb o‘qiladi)."""
+    for k, v in os.environ.items():
+        if k.strip().upper() == name:
+            return v
+    return ""
+
+
+CARD_NUMBER = env_any("CARD_NUMBER").strip()  # to‘lov qabul qilinadigan karta (Render Environment’da)
+CARD_HOLDER = env_any("CARD_HOLDER").strip()  # karta egasining ismi
 
 dp = Dispatcher()
 
