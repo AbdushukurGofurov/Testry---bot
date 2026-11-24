@@ -50,6 +50,27 @@ async def keep_awake(base: str):
             await asyncio.sleep(PING_EVERY)
 
 
+BOT_INFO = [
+    (None,
+     "🎯 Testry — kasb tanlashga yordam beruvchi test.\n\n"
+     "4 daqiqada 30 ta savolga javob bering va qiziqishlaringizga qaysi yo‘nalishlar mos kelishini bilib oling. "
+     "Test xalqaro RIASEC (Holland) metodikasiga asoslangan.\n\n"
+     "✅ Natija — bepul va darhol\n"
+     "📊 Xohlasangiz — to‘liq shaxsiy hisobot\n\n"
+     "Boshlash uchun «Start» tugmasini bosing 👇",
+     "Kasb tanlash testi: 30 savol, 4 daqiqa, natija bepul. Qiziqishlaringizga mos yo‘nalishni toping."),
+    ("ru",
+     "🎯 Testry — тест, который помогает выбрать профессию.\n\n"
+     "Ответьте на 30 вопросов за 4 минуты и узнайте, какие направления подходят вашим интересам. "
+     "Тест основан на международной методике RIASEC (Холланд).\n\n"
+     "✅ Результат — бесплатно и сразу\n"
+     "📊 По желанию — полный персональный отчёт\n\n"
+     "Нажмите «Старт», чтобы начать 👇",
+     "Тест на выбор профессии: 30 вопросов, 4 минуты, результат бесплатно. Найдите своё направление."),
+]
+
+
+
 async def patient(call, what: str, tries: int = 0):
     """Telegram so'rovini bajaradi; 'kuting' desa kutadi. tries=0 -> cheksiz urinish."""
     n = 0
@@ -97,6 +118,15 @@ async def main():
     # 2) Telegram bilan aloqa tiklanguncha sabr bilan kutamiz
     me = await patient(bot.get_me, "getMe")
     logging.info("Telegram bilan aloqa bor: @%s", me.username)
+
+    # Bot tavsifi ("Start"dan oldin ko'rinadigan matn), UZ - asosiy, RU - rus tilidagi foydalanuvchilar uchun
+    for lang_code, desc, short in BOT_INFO:
+        try:
+            await patient(lambda: bot.set_my_description(desc, language_code=lang_code), "setMyDescription", tries=3)
+            await patient(lambda: bot.set_my_short_description(short, language_code=lang_code), "setMyShortDescription", tries=3)
+        except Exception as e:
+            logging.warning("tavsif o‘rnatilmadi (%s): %s", lang_code, e)
+    logging.info("bot tavsifi o‘rnatildi")
 
     # 3) Webhook, bo'lmasa polling
     if BASE_URL:
