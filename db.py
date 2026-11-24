@@ -1,30 +1,59 @@
-"""Oddiy SQLite baza: har bir test urinishi bitta qator."""
+"""Javoblarni saqlash: har bir test urinishi bitta qator.
+
+DATABASE_URL bo'lsa PostgreSQL (Render), bo'lmasa SQLite fayl ishlatiladi.
+"""
 import json
 import os
 import sqlite3
 import time
 
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_PATH = os.getenv("DB_PATH", "testry.db")
+PG = bool(DATABASE_URL)
+
+if PG:
+    import psycopg
+    from psycopg.rows import dict_row
+
+
+class _Conn:
+    def __enter__(self):
+        if PG:
+            self.c = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=True)
+        else:
+            self.c = sqlite3.connect(DB_PATH)
+            self.c.row_factory = sqlite3.Row
+        return self
+
+    def __exit__(self, *exc):
+        if not PG:
+            self.c.commit()
+        self.c.close()
+
+    def execute(self, sql, params=()):
+        if PG:
+            sql = sql.replace("?", "%s")
+        return self.c.execute(sql, params)
 
 
 def conn():
-    c = sqlite3.connect(DB_PATH)
-    c.row_factory = sqlite3.Row
-    return c
+    return _Conn()
 
 
 def init():
+    id_col = "SERIAL PRIMARY KEY" if PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    big = "BIGINT" if PG else "INTEGER"
     with conn() as c:
-        c.execute("""CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
+        c.execute(f"""CREATE TABLE IF NOT EXISTS sessions (
+            id {id_col},
+            user_id {big} NOT NULL,
             username TEXT,
             first_name TEXT,
             ref TEXT,
-            started_at INTEGER,
-            finished_at INTEGER,
+            started_at {big},
+            finished_at {big},
             pos INTEGER DEFAULT 0,
-            data TEXT DEFAULT '{}',
+            data TEXT DEFAULT '{{}}',
             result TEXT,
             rating INTEGER,
             paid_click INTEGER DEFAULT 0,
@@ -39,10 +68,11 @@ def new_session(user_id, username, first_name, ref=None):
     with conn() as c:
         prev = c.execute("SELECT id FROM sessions WHERE user_id=? AND finished_at IS NOT NULL "
                          "ORDER BY id DESC LIMIT 1", (user_id,)).fetchone()
-        cur = c.execute("INSERT INTO sessions(user_id, username, first_name, ref, started_at, retest_of) "
-                        "VALUES (?,?,?,?,?,?)",
-                        (user_id, username, first_name, ref, int(time.time()), prev["id"] if prev else None))
-        return cur.lastrowid
+        row = c.execute("INSERT INTO sessions(user_id, username, first_name, ref, started_at, retest_of) "
+                        "VALUES (?,?,?,?,?,?) RETURNING id",
+                        (user_id, username, first_name, ref, int(time.time()),
+                         prev["id"] if prev else None)).fetchone()
+        return row["id"]
 
 
 def latest(user_id):
