@@ -70,6 +70,8 @@ T = {
     "share": {"uz": "📤 Do‘stlarga ulashish", "ru": "📤 Поделиться с друзьями"},
     "share_text": {"uz": "Men Testry’da qiziqishlarimni aniqladim. Siz ham sinab ko‘ring!",
                    "ru": "Я определил(а) свои интересы в Testry. Попробуйте и вы!"},
+    "rate_offer_btn": {"uz": "📘 To‘liq hisobot haqida", "ru": "📘 О полном отчёте"},
+    "offer_auto_intro": {"uz": "Natijangiz bo‘yicha yana bir imkoniyat 👇", "ru": "Ещё одна возможность по вашему результату 👇"},
     "rate": {"uz": "Natija sizni qanchalik to‘g‘ri tasvirladi?\n1 — umuman noto‘g‘ri, 5 — juda to‘g‘ri",
              "ru": "Насколько точно результат вас описал?\n1 — совсем неверно, 5 — очень точно"},
     "offer": {
@@ -359,7 +361,8 @@ async def finish(cb: CallbackQuery, sid: int):
     share_url = f"https://t.me/share/url?url={quote(link)}&text={quote(T['share_text'][lang])}"
     share = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=T["share"][lang], url=share_url)]])
     await cb.message.edit_text(text, reply_markup=share)
-    await cb.message.answer(T["rate"][lang], reply_markup=kb([[(str(i), str(i)) for i in range(1, 6)]], f"r:{sid}"))
+    await cb.message.answer(T["rate"][lang], reply_markup=kb(
+        [[(str(i), str(i)) for i in range(1, 6)], [(T["rate_offer_btn"][lang], "offer")]], f"r:{sid}"))
 
 
 @dp.callback_query(F.data.startswith("r:"))
@@ -371,6 +374,16 @@ async def on_rating(cb: CallbackQuery):
         await cb.answer()
         return
     lang = lang_of(row)
+    if val == "offer":
+        # baho bermasdan to‘g‘ridan-to‘g‘ri pullik taklifni ko‘rmoqchi
+        db.save(sid, stage="offer")
+        await cb.answer()
+        try:
+            await cb.message.edit_reply_markup(reply_markup=None)
+        except TelegramBadRequest:
+            pass
+        await show_offer(cb.message, sid)
+        return
     rating = int(val)
     db.save(sid, rating=rating, stage="wrong" if rating <= 4 else "offer")
     await cb.answer()
@@ -423,11 +436,48 @@ async def on_wrong(cb: CallbackQuery):
     await show_wrong(cb.message, sid, edit=True)
 
 
-async def show_offer(msg: Message, sid: int):
-    lang = lang_of(db.get(sid))
+def offer_message(sid: int):
+    row = db.get(sid)
+    data = db.data_of(row)
+    lang = data.get("lang", "uz")
+    if not data.get("offer_shown"):
+        data["offer_shown"] = int(time.time())
+        db.save(sid, touch=False, data=data)
     price = T["price"][lang].format(PRICE_TEXT) if PRICE_TEXT else ""
-    await msg.answer(T["offer"][lang].format(price=price), reply_markup=kb(
-        [[(T["buy"][lang], "buy")], [(T["no_thanks"][lang], "no")]], f"p:{sid}"))
+    return T["offer"][lang].format(price=price), kb(
+        [[(T["buy"][lang], "buy")], [(T["no_thanks"][lang], "no")]], f"p:{sid}")
+
+
+async def show_offer(msg: Message, sid: int):
+    text, markup = offer_message(sid)
+    await msg.answer(text, reply_markup=markup)
+
+
+OFFER_AFTER_MIN = int(os.getenv("OFFER_AFTER_MIN", "10"))
+
+
+async def auto_offer_once(bot: Bot):
+    """Natijani ko‘rib, baho bermay qolganlarga 10 daqiqadan keyin pullik taklifni o‘zi ko‘rsatadi."""
+    now = int(time.time())
+    for row in db.latest_per_user():
+        if row["stage"] not in ("rating", "wrong"):
+            continue
+        data = db.data_of(row)
+        idle = now - engage.last_active(row)
+        if data.get("offer_shown") or data.get("blocked") or idle < OFFER_AFTER_MIN * 60 or idle > 86400:
+            continue
+        lang = data.get("lang", "uz")
+        try:
+            db.save(row["id"], touch=False, stage="offer")
+            text, markup = offer_message(row["id"])
+            await bot.send_message(row["user_id"], T["offer_auto_intro"][lang])
+            await bot.send_message(row["user_id"], text, reply_markup=markup)
+        except TelegramForbiddenError:
+            data["blocked"] = 1
+            db.save(row["id"], touch=False, data=data)
+        except Exception as e:
+            logging.warning("auto_offer xatosi (sessiya %s): %s", row["id"], e)
+        await asyncio.sleep(0.1)
 
 
 @dp.callback_query(F.data.startswith("p:"))
@@ -1066,12 +1116,19 @@ async def engage_once(bot: Bot):
 
 async def engage_loop(bot: Bot):
     await asyncio.sleep(120)
+    tick = 0
     while True:
         try:
-            await engage_once(bot)
+            await auto_offer_once(bot)
         except Exception as e:
-            logging.warning("engage_loop: %s", e)
-        await asyncio.sleep(30 * 60)
+            logging.warning("auto_offer_loop: %s", e)
+        if tick % 6 == 0:
+            try:
+                await engage_once(bot)
+            except Exception as e:
+                logging.warning("engage_loop: %s", e)
+        tick += 1
+        await asyncio.sleep(5 * 60)
 
 
 _engage_started = False
