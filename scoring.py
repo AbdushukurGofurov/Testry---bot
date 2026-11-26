@@ -60,11 +60,11 @@ def env_lines(tipi: dict[str, float], lang: str) -> list[str]:
     t = {
         "ext": ("Odamlar bilan ko‘p muloqotli jamoa", "Tinch, mustaqil, chuqur e’tibor talab qiladigan muhit",
                 "Команда с активным общением", "Спокойная самостоятельная работа с глубоким фокусом"),
-        "con": ("Aniq reja va tuzilmali ish", "Erkin, moslashuvchan grafik",
+        "con": ("Aniq reja va tartib bilan ishlash", "Erkin, o‘zgaruvchan ish vaqti",
                 "Чёткий план и структура", "Свободный, гибкий график"),
-        "opn": ("Yangi, o‘zgaruvchan loyihalar", "Barqaror, aniq jarayonli ish",
+        "opn": ("Doim yangi, har xil ishlar", "Har kuni aniq va tushunarli ishlar",
                 "Новые, меняющиеся проекты", "Стабильная работа с понятными процессами"),
-        "agr": ("Hamkorlik va yordamga asoslangan jamoa", "Mustaqil qaror, bahs va muzokara bor muhit",
+        "agr": ("Bir-biriga yordam beradigan ahil jamoa", "O‘zingiz qaror qiladigan, bahs-munozara bor ish",
                 "Команда, построенная на сотрудничестве", "Самостоятельные решения, споры и переговоры"),
     }
     out = []

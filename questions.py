@@ -37,7 +37,7 @@ INTEREST = [
     ("C", "Katta tarmoqdagi kompyuterlarga dasturlar o‘rnatish", "Устанавливать программы на компьютеры в большой сети"),
     ("R", "Maishiy texnikani ta’mirlash", "Ремонтировать бытовую технику"),
     ("I", "Suv ifloslanishini kamaytirish yo‘llarini o‘rganish", "Изучать способы уменьшения загрязнения воды"),
-    ("A", "Musiqa bastalash yoki aranjirovka qilish", "Сочинять или аранжировать музыку"),
+    ("A", "Musiqa yozish yoki qo‘shiqqa musiqa ishlash", "Сочинять или аранжировать музыку"),
     ("S", "Odamlarga kasb tanlashda maslahat berish", "Консультировать людей по выбору профессии"),
     ("E", "O‘z biznesingizni ochish", "Открыть собственный бизнес"),
     ("C", "Kalkulyatorda hisob-kitob qilish", "Работать на калькуляторе"),
@@ -49,8 +49,8 @@ INTEREST = [
     ("C", "Yuk jo‘natish va qabul qilish hisobini yuritish", "Вести учёт отправки и получения грузов"),
     ("R", "Yuk mashinasida ofis va uylarga posilka yetkazish", "Водить грузовик, доставляя посылки в офисы и дома"),
     ("I", "Mikroskop yordamida qon namunalarini tekshirish", "Исследовать образцы крови под микроскопом"),
-    ("A", "Spektakllar uchun dekoratsiya chizish", "Расписывать декорации для спектаклей"),
-    ("S", "Notijorat tashkilotda ko‘ngilli bo‘lib ishlash", "Работать волонтёром в некоммерческой организации"),
+    ("A", "Teatr sahnasi uchun bezaklar chizish", "Расписывать декорации для спектаклей"),
+    ("S", "Xayriya tashkilotida ko‘ngilli bo‘lib ishlash", "Работать волонтёром в некоммерческой организации"),
     ("E", "Yangi kiyim kolleksiyasini bozorga olib chiqish va reklama qilish", "Продвигать новую линию одежды"),
     ("C", "Qo‘l skaneri bilan ombordagi tovarlarni ro‘yxatga olish", "Проводить инвентаризацию с помощью ручного терминала"),
     ("R", "Jo‘natishdan oldin detallar sifatini tekshirish", "Проверять качество деталей перед отправкой"),
@@ -66,16 +66,16 @@ INTEREST = [
 # ---------------------------------------------------------------------------
 
 TIPI = [
-    ("ext", False, "kirishimli, g‘ayratli", "общительный, полный энтузиазма"),
+    ("ext", False, "odamlar bilan tez til topishadigan, g‘ayratli", "общительный, полный энтузиазма"),
     ("agr", True, "tanqidchi, bahslashishni yoqtiradigan", "критичный, склонный спорить"),
     ("con", False, "ishonchli, intizomli", "надёжный, дисциплинированный"),
-    ("emo", True, "xavotirlanuvchan, tez xafa bo‘ladigan", "тревожный, легко расстраивающийся"),
-    ("opn", False, "yangilikka ochiq, ko‘p qirrali", "открытый новому, многогранный"),
+    ("emo", True, "tez xavotirlanadigan, tez xafa bo‘ladigan", "тревожный, легко расстраивающийся"),
+    ("opn", False, "yangilikka ochiq, ko‘p narsaga qiziquvchi", "открытый новому, многогранный"),
     ("ext", True, "kamgap, vazmin", "сдержанный, тихий"),
     ("agr", False, "hamdard, mehribon", "сочувствующий, тёплый"),
     ("con", True, "tartibsiz, e’tiborsiz", "неорганизованный, небрежный"),
-    ("emo", False, "xotirjam, hissiy jihatdan barqaror", "спокойный, эмоционально устойчивый"),
-    ("opn", True, "an’anaviy, ijodkorlikka moyil emas", "традиционный, нетворческий"),
+    ("emo", False, "xotirjam, kayfiyati tez o‘zgarmaydigan", "спокойный, эмоционально устойчивый"),
+    ("opn", True, "odatiy ishlarni yoqtiradigan, ijodga unchalik moyil emas", "традиционный, нетворческий"),
 ]
 
 TIPI_PREFIX = {"uz": "Men o‘zimni {} deb bilaman.", "ru": "Я считаю себя: {}."}
@@ -213,7 +213,7 @@ WRONG_PART = {
     "max": 5,
     "options": [
         ("type", "Tip nomi", "Название типа"),
-        ("desc", "Tavsif", "Описание"),
+        ("desc", "Tipning izohi", "Описание"),
         ("direction", "Tavsiya qilingan yo‘nalish", "Рекомендованное направление"),
         ("env", "Ish muhiti", "Рабочая среда"),
         ("all_ok", "Hammasi to‘g‘ri", "Всё верно"),
@@ -263,7 +263,7 @@ PAIRS = {
     "CI": ("Ma’lumotlar ustasi", "Мастер данных", "Data-tahlil va moliyaviy tahlil", "Анализ данных и финансовый анализ"),
     "AS": ("Ijodkor-Murabbiy", "Творец-наставник", "Pedagogika va kontent yaratish", "Педагогика и создание контента"),
     "AE": ("Kreativ Lider", "Креативный лидер", "Marketing va brend boshqaruvi", "Маркетинг и управление брендом"),
-    "AC": ("Aniqlikdagi Ijodkor", "Точный творец", "Grafik dizayn va muharrirlik", "Графический дизайн и редактура"),
+    "AC": ("Aniq Ijodkor", "Точный творец", "Grafik dizayn va muharrirlik", "Графический дизайн и редактура"),
     "ES": ("Ilhomlantiruvchi Lider", "Вдохновляющий лидер", "HR va sotuvni boshqarish", "HR и управление продажами"),
     "CS": ("G‘amxo‘r Tashkilotchi", "Заботливый организатор", "Tibbiy va ijtimoiy xizmatlar boshqaruvi", "Администрирование в медицине и соцсфере"),
     "CE": ("Boshqaruvchi-Menejer", "Управленец-менеджер", "Moliya va bank ishi", "Финансы и банковское дело"),

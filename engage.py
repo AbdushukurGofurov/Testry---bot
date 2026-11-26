@@ -40,7 +40,7 @@ E = {
         "uz": "Assalomu alaykum, {name}! 😊 To‘liq hisobotingizga oxirgi ochiq savollar qoldi. Ularni o‘tkazib yuborsangiz ham bo‘ladi.",
         "ru": "Здравствуйте, {name}! 😊 До полного отчёта остались последние открытые вопросы. Их можно и пропустить."},
     "rem_pay": {
-        "uz": "Assalomu alaykum, {name}! 😊 Barcha savollarga javob berdingiz, hisobotingiz tayyorlanishga tayyor. "
+        "uz": "Assalomu alaykum, {name}! 😊 Barcha savollarga javob berdingiz, hisobotingiz tayyor turibdi. "
               "To‘lov qilib, chek rasmini shu chatga yuborsangiz, hisobot darhol keladi.",
         "ru": "Здравствуйте, {name}! 😊 Вы ответили на все вопросы, отчёт готов к подготовке. "
               "Оплатите и отправьте фото чека в этот чат, и отчёт придёт сразу."},

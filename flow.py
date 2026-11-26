@@ -23,7 +23,7 @@ UI = {
     },
     "tipi_head": {"uz": "Xarakter", "ru": "Характер"},
     "tipi_hint": {
-        "uz": "<i>Juftlik sizni qanchalik to‘g‘ri tasvirlaydi? Bir so‘z ko‘proq mos kelsa ham, umumiy baholang.</i>",
+        "uz": "<i>Bu so‘zlar sizga qanchalik mos keladi? Ikkala so‘zga qarab, umumiy baho bering.</i>",
         "ru": "<i>Насколько пара слов описывает вас? Оцените пару целиком.</i>",
     },
     "ctx_head": {"uz": "Siz haqingizda", "ru": "О вас"},

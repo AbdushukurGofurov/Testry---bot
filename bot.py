@@ -54,7 +54,7 @@ T = {
         "uz": ("Salom, {name}! 👋\n\nBu test qiziqishlaringizni aniqlab, sizga mos yo‘nalishlarni ko‘rsatadi.\n"
                "⏱ 4 daqiqa · 30 ta savol · natija darhol\n\n"
                "To‘g‘ri yoki noto‘g‘ri javob yo‘q — o‘zingizga eng yaqinini tanlang.\n\n"
-               "<i>Test O*NET va TIPI materiallari asosida moslashtirilgan. O‘zgartirishlar va ogohlantirishlar: /about</i>"),
+               "<i>Test xalqaro kasb tanlash testlari (O*NET, TIPI) asosida tayyorlangan. Batafsil: /about</i>"),
         "ru": ("Привет, {name}! 👋\n\nЭтот тест определит ваши интересы и покажет подходящие направления.\n"
                "⏱ 4 минуты · 30 вопросов · результат сразу\n\n"
                "Правильных и неправильных ответов нет — выбирайте то, что ближе вам.\n\n"
@@ -80,7 +80,7 @@ T = {
                "✓ Fanlaringiz shu yo‘nalishlarga mosmi\n"
                "✓ Siz uchun qulay ish muhiti\n"
                "✓ Kasb tanlashdagi ikkilanishingizga alohida javob\n"
-               "✓ Javoblaringiz asosida shaxsiy AI-izoh\n"
+               "✓ Javoblaringiz asosida faqat sizga yozilgan izoh\n"
                "✓ 2 haftalik sinov rejasi\n"
                "✓ Ota-onangiz uchun alohida sahifa\n\n"
                "Hisobot aniq chiqishi uchun yana 16 ta qisqa savolga javob berasiz (~3 daqiqa). "
@@ -111,7 +111,7 @@ T = {
                  "ru": "💳 Оплата: <b>{price}</b>\nНомер карты: <code>{card}</code>\nВладелец: {holder}\n"
                        "<i>(нажмите на номер, чтобы скопировать)</i>\n\n"},
     "pay_manual": {"uz": "💳 To‘lov: <b>{price}</b>\n\n", "ru": "💳 Оплата: <b>{price}</b>\n\n"},
-    "paid_intro": {"uz": "Endi hisobotingizni shaxsiylashtiramiz: 14 ta tugmali savol va 2 ta ochiq savol (~3 daqiqa). 👇",
+    "paid_intro": {"uz": "Endi hisobotni aynan sizga moslaymiz: 14 ta tugmali savol va 2 ta ochiq savol (~3 daqiqa). 👇",
                    "ru": "Теперь сделаем отчёт персональным: 14 вопросов с кнопками и 2 открытых (~3 минуты). 👇"},
     "open_intro": {"uz": "Deyarli tayyor! Oxirgi 2 ta savol (ixtiyoriy, lekin hisobotni ancha aniq qiladi):",
                    "ru": "Почти готово! Последние 2 вопроса (необязательно, но делают отчёт точнее):"},
@@ -136,7 +136,7 @@ T = {
               "• sizga mos 6 ta yo‘nalish va nega aynan ular\n"
               "• fanlaringiz shu yo‘nalishlarga mosmi\n"
               "• siz uchun qulay ish muhiti\n"
-              "• ikkilanishlaringizga maslahat va shaxsiy izoh\n"
+              "• ikkilanishlaringizga maslahat va faqat sizga yozilgan izoh\n"
               "• 2 haftalik sinov rejasi va ota-onangiz uchun sahifa\n\n"
               "<b>Hisobotni olish uchun keyingi qadam:</b>\n"
               "1️⃣ Quyidagi kartaga to‘lov qiling\n"
@@ -1152,7 +1152,8 @@ USER_COMMANDS = {
            ("language", "🌐 Сменить язык"), ("help", "💬 Помощь и вопросы"), ("about", "ℹ️ О тесте")],
 }
 ADMIN_COMMANDS = [("stats", "📊 Statistika"), ("funnel", "📉 Kim qayerda to‘xtadi"), ("users", "👥 Oxirgi foydalanuvchilar"),
-                  ("export", "📁 Barcha javoblar (fayl)"), ("retest", "🔁 Qayta test taklifi")]
+                  ("export", "📁 Barcha javoblar (fayl)"), ("retest", "🔁 Qayta test taklifi"),
+                  ("promo", "📣 To‘lamaganlarga hisobot taklifi")]
 
 MENU_T = {
     "no_result": {"uz": "Siz hali testni yechmagansiz 🙂 Boshlash uchun: /start",
@@ -1247,6 +1248,142 @@ async def on_funnel(message: Message):
         lines.append("\n🔎 Eng ko‘p to‘xtagan joylar: " + "; ".join(f"{engage.step_label(k)} ({v})" for v, k in stuck))
     lines.append("\nBatafsil ro‘yxat: /users")
     await message.answer("\n".join(lines))
+
+
+# ---------------- Pullik hisobot taklifi: to‘lamaganlarga bir martalik xabar ----------------
+
+PROMO_T = {
+    "free": {
+        "uz": "Assalomu alaykum, {name}! 😊\n\nTestry testida natijangiz: <b>{tip}</b>. Bu faqat boshlanishi.\n\n"
+              "📘 <b>To‘liq hisobotda</b> sizga aniq javoblar bor:\n"
+              "• sizga mos 6 ta yo‘nalish (masalan, “{d1}” va “{d2}”) va nega aynan ular\n"
+              "• fanlaringiz shu yo‘nalishlarga mos keladimi\n"
+              "• qanday muhitda yaxshi ishlaysiz\n"
+              "• kasb tanlashdagi ikkilanishingizga maslahat\n"
+              "• 2 haftalik sinov rejasi va ota-onangiz uchun alohida sahifa\n\n"
+              "Bor-yo‘g‘i 16 ta qisqa savol (~3 daqiqa) va <b>{price}</b>. To‘lov tasdiqlanishi bilan hisobot darhol keladi.",
+        "ru": "Здравствуйте, {name}! 😊\n\nВаш результат в тесте Testry: <b>{tip}</b>. Это только начало.\n\n"
+              "📘 <b>В полном отчёте</b> — конкретные ответы:\n"
+              "• 6 подходящих направлений (например, «{d1}» и «{d2}») и почему именно они\n"
+              "• подходят ли ваши предметы к этим направлениям\n"
+              "• в какой среде вам комфортно работать\n"
+              "• совет по вашим сомнениям в выборе профессии\n"
+              "• план проб на 2 недели и отдельная страница для родителей\n\n"
+              "Всего 16 коротких вопросов (~3 минуты) и <b>{price}</b>. Сразу после подтверждения оплаты отчёт придёт.",
+    },
+    "paid_q": {
+        "uz": "Assalomu alaykum, {name}! 😊\n\nSiz to‘liq hisobot uchun savollarga javob bera boshlagan edingiz. "
+              "Bor-yo‘g‘i <b>{left} ta savol</b> qoldi, javoblaringiz saqlangan.\n\n"
+              "Hisobotda sizni kutmoqda: “{d1}”, “{d2}” va yana 4 ta mos yo‘nalish, fanlaringiz tahlili, "
+              "2 haftalik sinov rejasi va ota-onangiz uchun sahifa. Tugatib, <b>{price}</b> to‘lasangiz, hisobot darhol keladi.",
+        "ru": "Здравствуйте, {name}! 😊\n\nВы начали отвечать на вопросы для полного отчёта. "
+              "Осталось всего <b>{left} вопросов</b>, ответы сохранены.\n\n"
+              "В отчёте вас ждут: «{d1}», «{d2}» и ещё 4 подходящих направления, анализ предметов, "
+              "план проб на 2 недели и страница для родителей. Закончите и оплатите <b>{price}</b> — отчёт придёт сразу.",
+    },
+    "pay": {
+        "uz": "Assalomu alaykum, {name}! 😊\n\nShaxsiy hisobotingiz tayyor turibdi, faqat to‘lov qoldi.{partial}\n\n"
+              "Unda: “{d1}”, “{d2}” va yana 4 ta mos yo‘nalish, fanlaringiz tahlili, qulay ish muhiti, "
+              "2 haftalik sinov rejasi va ota-onangiz uchun sahifa.\n\n{pay}"
+              "👉 To‘lov qilib, chek rasmini (skrinshotini) shu chatga yuboring. To‘lov tasdiqlanishi bilan hisobot <b>darhol</b> keladi.",
+        "ru": "Здравствуйте, {name}! 😊\n\nВаш персональный отчёт готов, осталась только оплата.{partial}\n\n"
+              "В нём: «{d1}», «{d2}» и ещё 4 подходящих направления, анализ предметов, комфортная рабочая среда, "
+              "план проб на 2 недели и страница для родителей.\n\n{pay}"
+              "👉 Оплатите и отправьте фото (скриншот) чека в этот чат. Сразу после подтверждения отчёт придёт <b>моментально</b>.",
+    },
+    "partial": {"uz": " Oldingi to‘lovingiz to‘liq summaga yetmagan edi, qolgan summani o‘tkazsangiz bo‘ldi.",
+                "ru": " Предыдущая оплата была неполной, достаточно перевести оставшуюся сумму."},
+}
+
+
+def promo_plan(row, data: dict):
+    """Foydalanuvchi tarixiga qarab qaysi xabar kerakligini aniqlaydi: (guruh, matn, tugmalar) yoki None."""
+    import json
+    if not row["finished_at"] or not row["result"] or data.get("pay") in ("ok", "pending") or data.get("blocked"):
+        return None
+    res = json.loads(row["result"])
+    top = res.get("top") or []
+    if len(top) < 2:
+        return None
+    lang = data.get("lang", "uz")
+    i = 0 if lang == "uz" else 1
+    dirs = report.pick_directions(top)
+    d1, d2 = dirs[0][i], dirs[3][i]
+    if res.get("kind") == "normal":
+        tip = PAIRS[pair_key(*top)][i]
+    elif res.get("kind") == "flat":
+        tip = "Keng qiziqishli izlanuvchi" if lang == "uz" else "Исследователь с широкими интересами"
+    else:
+        tip = ", ".join(TYPE_NAMES[t][lang] for t in top)
+    name = html.escape(row["first_name"] or "")
+    price = html.escape(PRICE_TEXT or "8 990 so‘m")
+    st, sid = row["stage"], row["id"]
+    if data.get("phase") != "paid":
+        text = PROMO_T["free"][lang].format(name=name, tip=html.escape(tip), d1=d1, d2=d2, price=price)
+        markup = kb([[(T["buy"][lang], "buy")], [(T["no_thanks"][lang], "no")]], f"p:{sid}")
+        return "free", text, markup
+    if st in ("paid_q", "dream", "doubt"):
+        left = max(1, 14 - (row["pos"] or 0)) + 2 if st == "paid_q" else (2 if st == "dream" else 1)
+        text = PROMO_T["paid_q"][lang].format(name=name, left=left, d1=d1, d2=d2, price=price)
+        return "paid_q", text, kb([[(E["btn_continue"][lang], "cont")]], f"rem:{sid}")
+    if st == "done":
+        partial = PROMO_T["partial"][lang] if data.get("pay") == "partial" else ""
+        text = PROMO_T["pay"][lang].format(name=name, partial=partial, d1=d1, d2=d2, pay=pay_text(lang))
+        return "pay", text, None
+    return None
+
+
+@dp.message(Command("promo"))
+async def on_promo(message: Message, command: CommandObject):
+    """/promo — kimga qanday xabar ketishini ko‘rsatadi (namuna sizga keladi). /promo send — haqiqatan yuboradi."""
+    if not is_admin(message.from_user.id):
+        return
+    send = (command.args or "").strip().lower() == "send"
+    plans = []
+    for row in db.latest_per_user():
+        if row["user_id"] in ADMIN_IDS:
+            continue
+        data = db.data_of(row)
+        if data.get("promo1"):
+            continue
+        p = promo_plan(row, data)
+        if p:
+            plans.append((row, data, p))
+    groups = {"free": "Bepul natija olgan, pullikni boshlamagan",
+              "paid_q": "Pullik savollarni boshlab, tugatmagan",
+              "pay": "Pullik savollarni tugatgan, to‘lamagan"}
+    counts = {g: sum(1 for _r, _d, p in plans if p[0] == g) for g in groups}
+    summary = "\n".join(f"• {groups[g]}: <b>{counts[g]}</b>" for g in groups)
+    if not send:
+        await message.answer(f"📣 <b>Pullik hisobot taklifi (namuna)</b>\n\n{summary}\n\nJami: <b>{len(plans)}</b> kishi. "
+                             "Har guruhdan bitta namuna pastda. Hammaga yuborish uchun: <code>/promo send</code>")
+        shown = set()
+        for _r, _d, (g, text, markup) in plans:
+            if g not in shown:
+                shown.add(g)
+                await message.answer(f"— {groups[g]} —")
+                await message.answer(text, reply_markup=None)
+        return
+    sent = failed = 0
+    for row, data, (g, text, markup) in plans:
+        try:
+            if g == "free":
+                db.save(row["id"], touch=False, stage="offer")
+            await message.bot.send_message(row["user_id"], text, reply_markup=markup)
+            data = db.data_of(db.get(row["id"]))
+            data["promo1"] = int(time.time())
+            db.save(row["id"], touch=False, data=data)
+            sent += 1
+        except TelegramForbiddenError:
+            data["blocked"] = 1
+            db.save(row["id"], touch=False, data=data)
+            failed += 1
+        except Exception as e:
+            logging.warning("promo xatosi (sessiya %s): %s", row["id"], e)
+            failed += 1
+        await asyncio.sleep(0.05)
+    await message.answer(f"📣 Yuborildi: <b>{sent}</b> kishiga" + (f", yetib bormadi: {failed}" if failed else "") +
+                         f"\n\n{summary}")
 
 
 @dp.message(Command("users"))

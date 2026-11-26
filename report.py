@@ -45,7 +45,7 @@ DIRECTIONS = {
         ("Dasturiy injiniring va kompyuter fanlari", "Программная инженерия и компьютерные науки",
          "murakkab masalani bo‘laklarga ajratib, mantiq bilan yechish",
          "разбивать сложную задачу на части и решать её логикой"),
-        ("Data science va sun’iy intellekt", "Data science и искусственный интеллект",
+        ("Ma’lumotlar tahlili (Data science) va sun’iy intellekt", "Data science и искусственный интеллект",
          "ma’lumotlar ichidan qonuniyat topish va “nega?” savoliga javob izlash",
          "находить закономерности в данных и искать ответ на вопрос «почему?»"),
         ("Tibbiyot (davolash ishi)", "Медицина (лечебное дело)",
@@ -147,8 +147,9 @@ DIFF_ADVICE = {
              "Undan so‘rang: oddiy ish kuni qanday o‘tadi, nimasi yoqadi, nimasi qiyin?",
              "Если мало знаете о профессиях, самый быстрый путь — 15 минут поговорить с человеком из этой сферы. "
              "Спросите: как проходит обычный рабочий день, что нравится, что трудно?"),
-    "many": ("Ko‘p narsaga qiziqish — kuchli tomon. Tanlashni osonlashtirish uchun yo‘nalishlarni 3 mezon bo‘yicha "
-             "1–5 ball bilan baholang: qiziqish, qobiliyat, daromad. Eng yuqori yig‘indili 2 tasini sinab ko‘ring.",
+    "many": ("Ko‘p narsaga qiziqish — kuchli tomon. Tanlashni osonlashtirish uchun har bir yo‘nalishga 3 narsa bo‘yicha "
+             "1 dan 5 gacha ball qo‘ying: qanchalik qiziq, qanchalik qo‘lingizdan keladi, qanchalik pul topadi. "
+             "Eng ko‘p ball to‘plagan 2 tasini sinab ko‘ring.",
              "Широкие интересы — это сила. Чтобы выбрать, оцените направления по 3 критериям от 1 до 5: интерес, "
              "способности, доход. Попробуйте 2 направления с самой высокой суммой."),
     "parents": ("Ota-onangiz bilan bahslashish o‘rniga ularga shu hisobotning “Ota-onalar uchun” qismini ko‘rsating. "
@@ -205,7 +206,7 @@ MINI_TASK = {
 H = {
     "title": ("📘 <b>Testry · To‘liq hisobot</b>", "📘 <b>Testry · Полный отчёт</b>"),
     "for": ("{name} uchun", "для {name}"),
-    "s1": ("<b>Qiziqishlar profilingiz</b>", "<b>Ваш профиль интересов</b>"),
+    "s1": ("<b>Qiziqishlaringiz natijasi</b>", "<b>Ваш профиль интересов</b>"),
     "s2": ("<b>Sizga mos yo‘nalishlar</b>", "<b>Подходящие направления</b>"),
     "s3": ("<b>Fanlaringiz va yo‘nalishlar</b>", "<b>Ваши предметы и направления</b>"),
     "s4": ("<b>Siz uchun qulay ish muhiti</b>", "<b>Комфортная для вас рабочая среда</b>"),
@@ -279,7 +280,8 @@ def section_profile(res: dict, data: dict, lang: str) -> str:
         lines.append("Qiziqishlaringiz bir nechta sohaga deyarli teng taqsimlangan: bu keng imkoniyat degani."
                      if lang == "uz" else "Ваши интересы почти поровну распределены между несколькими сферами — это широкие возможности.")
     else:
-        lines.append("Ballaringiz umuman pastroq: qiziqishlaringiz hali shakllanmoqda. Quyidagi yo‘nalishlar eng kuchli tomoningizga asoslangan."
+        lines.append("Testdagi ishlarning ko‘pi hozircha sizga unchalik yoqmadi. Bu normal: qiziqish biror narsani sinab ko‘rgan sari paydo bo‘ladi. "
+                     "Quyidagi yo‘nalishlar sizga eng ko‘p yoqqan tomonlarga qarab tanlangan."
                      if lang == "uz" else "Баллы в целом невысокие: интересы ещё формируются. Направления ниже основаны на самых сильных сторонах.")
     for t in top:
         lines.append(f"• <b>{_typename(t, lang)}</b>: {TYPE_LIKES[t][lang]}")
@@ -413,7 +415,7 @@ def fallback_comment(data: dict, res: dict, lang: str) -> str:
                      (f"Ваше сомнение: «{html.escape(doubt[:300], quote=False)}». Такие сомнения бывают у многих; их легче решить "
                       "не размышлениями, а маленькими практическими пробами."))
     if not parts:
-        parts.append((f"Profilingizda {_typename(top[0], lang)} va {_typename(top[1], lang)} tomonlari yetakchi. "
+        parts.append((f"Sizda eng kuchli qiziqishlar: {_typename(top[0], lang)} va {_typename(top[1], lang)}. "
                       "Shu ikkalasini birlashtiradigan ish sizga eng ko‘p zavq beradi.")
                      if lang == "uz" else
                      (f"В вашем профиле лидируют стороны «{_typename(top[0], lang)}» и «{_typename(top[1], lang)}». "
